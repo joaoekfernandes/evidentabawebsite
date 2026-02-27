@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EvidentABA | AI-Powered ABA Therapy Verification Platform</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #222734;
+      --ink2: #2a3040;
+      --paper: #f2efe8;
+      --paper2: #e8e4db;
+      --sage: #3e7287;
+      --sage-light: #646ab7;
+      --sage-glow: rgba(52, 55, 116, 0.15);
+      --cobalt: #1c3d7a;
+      --cobalt-light: #2550a0;
+      --gold: #c8973a;
+      --gold-light: #e0b05a;
+      --white: #ffffff;
+      --mist: rgba(242,239,232,0.06);
+      --mist2: rgba(242,239,232,0.12);
+      --border-dark: rgba(242,239,232,0.1);
+      --border-paper: rgba(13,15,20,0.12);
+    }
+
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--ink);
+      color: var(--paper);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    #root { min-height: 100vh; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--ink); }
+    ::-webkit-scrollbar-thumb { background: var(--sage); border-radius: 2px; }
+
+    /* ── GRAIN OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 999; pointer-events: none;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+
+    /* ── NAV ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 52px; height: 64px;
+      background: rgba(13,15,20,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-dark);
+      transition: all 0.3s;
+    }
+    .nav.scrolled { background: rgba(13,15,20,0.97); }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer; text-decoration: none;
+    }
+    .nav-mark {
+      width: 28px; height: 28px;
+      border: 1.5px solid var(--sage);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem; font-weight: 700;
+      color: var(--paper); letter-spacing: 0.02em;
+    }
+    .nav-toggle {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 13px;
+      border: 1px solid var(--border-dark);
+      border-radius: 100px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; font-weight: 400;
+      color: rgba(242,239,232,0.5);
+      background: transparent; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.05em;
+    }
+    .nav-toggle:hover { border-color: var(--sage); color: var(--paper); }
+    .nav-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .nav-links { display: flex; gap: 0; }
+    .nav-links a {
+      font-size: 0.78rem; font-weight: 500; letter-spacing: 0.03em;
+      color: rgba(242,239,232,0.5); text-decoration: none;
+      padding: 6px 14px; border-radius: 6px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--paper); }
+    .nav-cta {
+      background: var(--sage); color: var(--white);
+      padding: 8px 18px; border-radius: 6px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.78rem; font-weight: 600;
+      border: none; cursor: pointer; letter-spacing: 0.04em;
+      transition: all 0.2s;
+    }
+    .nav-cta:hover { background: var(--sage-light); transform: translateY(-1px); }
+
+    /* ── HOME ── */
+    .home {
+      min-height: 100vh; padding-top: 64px;
+      display: grid; grid-template-rows: 1fr auto;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(61,107,90,0.12) 0%, transparent 55%),
+        var(--ink);
+    }
+    .home-center {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 80px 40px;
+      text-align: center;
+      position: relative;
+    }
+    .home-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; font-weight: 400;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--sage-light);
+      margin-bottom: 28px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .home-eyebrow::before, .home-eyebrow::after {
+      content: '';
+      width: 40px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--sage));
+    }
+    .home-eyebrow::after { background: linear-gradient(90deg, var(--sage), transparent); }
+    .home-h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3.5rem, 8vw, 7.5rem);
+      font-weight: 300; line-height: 0.95;
+      letter-spacing: -0.02em;
+      color: var(--paper);
+      margin-bottom: 16px;
+    }
+    .home-h1 em { font-style: italic; color: var(--sage-light); }
+    .home-sub {
+      font-size: 0.9rem; font-weight: 400;
+      color: rgba(242,239,232,0.45);
+      max-width: 440px; line-height: 1.75;
+      margin-bottom: 60px; letter-spacing: 0.01em;
+    }
+    .path-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px; max-width: 780px; width: 100%;
+    }
+    .path-tile {
+      position: relative; overflow: hidden;
+      border: 1px solid var(--border-dark);
+      border-radius: 2px;
+      padding: 36px 32px;
+      text-align: left; cursor: pointer;
+      transition: all 0.4s;
+      background: var(--mist);
+    }
+    .path-tile::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .path-tile.sage-t::before { background: linear-gradient(90deg, var(--sage), var(--sage-light)); }
+    .path-tile.cobalt-t::before { background: linear-gradient(90deg, var(--cobalt), var(--cobalt-light)); }
+    .path-tile:hover { background: var(--mist2); transform: translateY(-3px); border-color: var(--border-dark); }
+    .path-tile:hover::before { opacity: 1; }
+    .path-tile-no {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.15em;
+      color: rgba(242,239,232,0.2);
+      margin-bottom: 20px; display: block;
+    }
+    .path-tile h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem; font-weight: 600;
+      line-height: 1.15; margin-bottom: 10px;
+      color: var(--paper);
+    }
+    .path-tile .tile-desc {
+      font-size: 0.78rem; color: rgba(242,239,232,0.4);
+      line-height: 1.7; margin-bottom: 20px;
+    }
+    .tile-bullets { list-style: none; margin-bottom: 24px; }
+    .tile-bullets li {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.76rem; color: rgba(242,239,232,0.55);
+      padding: 4px 0; border-bottom: 1px solid var(--border-dark);
+    }
+    .tile-bullets li:last-child { border-bottom: none; }
+    .tile-arrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; letter-spacing: 0.08em;
+      display: flex; align-items: center; gap: 6px;
+      transition: gap 0.2s;
+    }
+    .path-tile:hover .tile-arrow { gap: 10px; }
+    .tile-arrow.sage { color: var(--sage-light); }
+    .tile-arrow.cobalt { color: #6b9ade; }
+    .home-note {
+      margin-top: 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; letter-spacing: 0.06em;
+      color: rgba(242,239,232,0.25);
+    }
+    .home-note a { color: rgba(242,239,232,0.45); text-decoration: none; border-bottom: 1px solid var(--border-dark); padding-bottom: 1px; }
+    .home-note a:hover { color: var(--sage-light); border-color: var(--sage); }
+
+    /* ── PAGE STRUCTURE ── */
+    .page { padding-top: 64px; }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 100px 80px 90px;
+      position: relative; overflow: hidden;
+    }
+    .hero.sage-hero {
+      background:
+        radial-gradient(ellipse 70% 80% at 100% 50%, rgba(61,107,90,0.1) 0%, transparent 60%),
+        linear-gradient(180deg, rgba(61,107,90,0.06) 0%, transparent 100%),
+        var(--ink2);
+    }
+    .hero.cobalt-hero {
+      background:
+        radial-gradient(ellipse 70% 80% at 100% 50%, rgba(28,61,122,0.15) 0%, transparent 60%),
+        linear-gradient(180deg, rgba(28,61,122,0.07) 0%, transparent 100%),
+        var(--ink2);
+    }
+    .hero-inner { max-width: 820px; }
+    .hero-crumb {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.15em;
+      color: rgba(242,239,232,0.25);
+      margin-bottom: 36px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .hero-crumb a { color: inherit; text-decoration: none; }
+    .hero-crumb a:hover { color: var(--paper); }
+    .hero-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 20px; display: block;
+    }
+    .hero-label.sage { color: var(--sage-light); }
+    .hero-label.cobalt { color: #6b9ade; }
+    .hero-h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.8rem, 6vw, 5.5rem);
+      font-weight: 300; line-height: 1.0;
+      letter-spacing: -0.02em;
+      color: var(--paper); margin-bottom: 10px;
+    }
+    .hero-h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.6rem, 3.5vw, 3rem);
+      font-weight: 400; font-style: italic;
+      margin-bottom: 28px;
+    }
+    .hero-h2.sage { color: var(--sage-light); }
+    .hero-h2.cobalt { color: #6b9ade; }
+    .hero-p {
+      font-size: 0.88rem; font-weight: 400;
+      color: rgba(242,239,232,0.5);
+      max-width: 560px; line-height: 1.8;
+      margin-bottom: 36px;
+    }
+    .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-sage { background: var(--sage); color: white; padding: 12px 24px; border-radius: 4px; font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-sage:hover { background: var(--sage-light); transform: translateY(-2px); }
+    .btn-cobalt { background: var(--cobalt); color: white; padding: 12px 24px; border-radius: 4px; font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-cobalt:hover { background: var(--cobalt-light); transform: translateY(-2px); }
+    .btn-ghost { background: transparent; color: var(--paper); padding: 12px 24px; border-radius: 4px; font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; border: 1px solid var(--border-dark); cursor: pointer; transition: all 0.2s; }
+    .btn-ghost:hover { border-color: rgba(242,239,232,0.3); background: var(--mist); }
+    .btn-ghost-white { background: transparent; color: rgba(242,239,232,0.7); padding: 12px 24px; border-radius: 4px; font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; border: 1px solid rgba(242,239,232,0.2); cursor: pointer; transition: all 0.2s; }
+    .btn-ghost-white:hover { color: white; border-color: rgba(242,239,232,0.5); }
+
+    /* ── SECTIONS ── */
+    .sec { padding: 80px; }
+    .sec-dark { background: var(--ink); }
+    .sec-dark2 { background: var(--ink2); }
+    .sec-sage { background: rgba(61,107,90,0.07); border-top: 1px solid rgba(61,107,90,0.15); border-bottom: 1px solid rgba(61,107,90,0.15); }
+    .sec-cobalt { background: rgba(28,61,122,0.08); border-top: 1px solid rgba(28,61,122,0.15); border-bottom: 1px solid rgba(28,61,122,0.15); }
+    .sec-paper { background: var(--paper); color: var(--ink); }
+    .sec-center { text-align: center; }
+
+    .mono-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 10px; display: block;
+    }
+    .mono-label.sage { color: var(--sage-light); }
+    .mono-label.cobalt { color: #6b9ade; }
+    .mono-label.gold { color: var(--gold-light); }
+    .mono-label.dark { color: var(--sage); }
+
+    .sec-h {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300; line-height: 1.05;
+      letter-spacing: -0.02em;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      color: var(--paper); margin-bottom: 14px;
+    }
+    .sec-h.dark { color: var(--ink); }
+    .sec-h em { font-style: italic; }
+    .sec-p {
+      font-size: 0.85rem; color: rgba(242,239,232,0.45);
+      max-width: 540px; line-height: 1.8; margin-bottom: 48px;
+    }
+    .sec-p.dark { color: rgba(13,15,20,0.55); }
+    .sec-p.center { margin-left: auto; margin-right: auto; }
+
+    /* ── CARDS ── */
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border-dark); }
+    .grid3-card {
+      padding: 36px 30px;
+      background: var(--ink2);
+      transition: background 0.2s;
+      position: relative;
+    }
+    .grid3-card:hover { background: rgba(22,25,32,0.95); }
+    .grid3-card::before {
+      content: attr(data-no);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem; letter-spacing: 0.15em;
+      color: rgba(242,239,232,0.12);
+      position: absolute; top: 24px; right: 24px;
+    }
+    .card-icon {
+      width: 40px; height: 40px; border-radius: 3px;
+      border: 1px solid var(--border-dark);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; margin-bottom: 20px;
+    }
+    .grid3-card h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.92rem; font-weight: 700;
+      margin-bottom: 8px; color: var(--paper);
+      letter-spacing: 0.01em;
+    }
+    .grid3-card p { font-size: 0.8rem; color: rgba(242,239,232,0.4); line-height: 1.75; }
+    .card-bullets { list-style: none; margin-top: 14px; }
+    .card-bullets li {
+      font-size: 0.75rem; color: rgba(242,239,232,0.35);
+      padding: 5px 0; border-bottom: 1px solid rgba(242,239,232,0.05);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-bullets li:last-child { border-bottom: none; }
+    .cb-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+    .cb-dot.sage { background: var(--sage-light); }
+    .cb-dot.cobalt { background: #6b9ade; }
+
+    /* ── SPLIT ── */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    .split-l { padding: 80px; }
+    .split-r { padding: 80px; }
+    .split-r.border-l { border-left: 1px solid var(--border-dark); }
+    .split-l.border-r { border-right: 1px solid var(--border-dark); }
+
+    /* ── MOCK UI (Session Capture) ── */
+    .mock {
+      background: rgba(22,25,32,0.9);
+      border: 1px solid var(--border-dark);
+      border-radius: 6px; overflow: hidden;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+    }
+    .mock-topbar {
+      background: rgba(30,34,42,0.95);
+      border-bottom: 1px solid var(--border-dark);
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .mdot { width: 8px; height: 8px; border-radius: 50%; }
+    .mock-title { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: rgba(242,239,232,0.2); margin-left: 4px; }
+    .mock-body { padding: 20px; }
+    .mock-client-hd { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; color: rgba(242,239,232,0.2); margin-bottom: 3px; }
+    .mock-session-hd { font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; color: rgba(242,239,232,0.7); margin-bottom: 14px; }
+    .mock-status { display: inline-flex; align-items: center; gap: 5px; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--sage-light); border: 1px solid rgba(61,107,90,0.3); border-radius: 100px; padding: 3px 10px; margin-bottom: 14px; }
+    .mock-status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--sage-light); animation: blink 1.5s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .mock-field { display: flex; align-items: flex-start; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(242,239,232,0.05); font-size: 0.73rem; gap: 12px; }
+    .mock-field:last-of-type { border-bottom: none; }
+    .mock-field-l { color: rgba(242,239,232,0.25); flex-shrink: 0; }
+    .mock-field-r { color: rgba(242,239,232,0.7); font-weight: 500; text-align: right; }
+    .mock-notes { background: rgba(242,239,232,0.03); border: 1px solid var(--border-dark); border-radius: 3px; padding: 10px 12px; margin: 12px 0; font-size: 0.73rem; color: rgba(242,239,232,0.45); line-height: 1.6; }
+    .mock-score { background: linear-gradient(135deg, rgba(61,107,90,0.2), rgba(61,107,90,0.05)); border: 1px solid rgba(61,107,90,0.25); border-radius: 4px; padding: 14px; text-align: center; margin-top: 12px; }
+    .mock-score-n { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; font-weight: 600; color: var(--sage-light); line-height: 1; }
+    .mock-score-l { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.12em; color: rgba(242,239,232,0.3); margin-top: 4px; }
+    .mock-ai { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; background: var(--sage); color: white; padding: 2px 7px; border-radius: 2px; display: inline-block; margin-bottom: 8px; }
+    .mock-complete { width: 100%; margin-top: 12px; padding: 9px; background: var(--sage); color: white; border: none; border-radius: 3px; font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.05em; cursor: pointer; transition: background 0.2s; }
+    .mock-complete:hover { background: var(--sage-light); }
+
+    /* ── STEPS ── */
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--border-dark); }
+    .step-item { padding: 32px 26px; border-right: 1px solid var(--border-dark); position: relative; }
+    .step-item:last-child { border-right: none; }
+    .step-no { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; color: rgba(242,239,232,0.2); margin-bottom: 16px; }
+    .step-item h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 7px; color: var(--paper); }
+    .step-item p { font-size: 0.76rem; color: rgba(242,239,232,0.4); line-height: 1.65; }
+
+    /* ── METRICS STRIP ── */
+    .metrics-strip { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border-dark); border-bottom: 1px solid var(--border-dark); }
+    .metric-cell { padding: 40px 32px; border-right: 1px solid var(--border-dark); text-align: center; }
+    .metric-cell:last-child { border-right: none; }
+    .metric-n { font-family: 'Cormorant Garamond', serif; font-size: clamp(2.4rem, 4vw, 3.8rem); font-weight: 300; line-height: 1; color: var(--paper); letter-spacing: -0.02em; }
+    .metric-n .hl { color: var(--sage-light); }
+    .metric-l { font-size: 0.75rem; color: rgba(242,239,232,0.35); margin-top: 8px; line-height: 1.5; }
+
+    /* ── FRAUD GRID ── */
+    .fraud-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border-dark); }
+    .fraud-cell { background: rgba(22,25,32,0.6); padding: 28px 24px; }
+    .fraud-cell:hover { background: rgba(30,34,42,0.8); }
+    .fraud-tag { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; background: rgba(200,151,58,0.15); color: var(--gold-light); border: 1px solid rgba(200,151,58,0.2); padding: 3px 8px; border-radius: 2px; display: inline-block; margin-bottom: 10px; }
+    .fraud-cell h4 { font-size: 0.85rem; font-weight: 700; color: var(--paper); margin-bottom: 6px; }
+    .fraud-cell p { font-size: 0.76rem; color: rgba(242,239,232,0.35); line-height: 1.65; }
+
+    /* ── STOP LIST ── */
+    .stop-list { display: flex; flex-direction: column; gap: 1px; }
+    .stop-item { background: rgba(242,239,232,0.04); border: 1px solid var(--border-dark); padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start; transition: background 0.2s; }
+    .stop-item:hover { background: rgba(242,239,232,0.07); }
+    .stop-ico { width: 36px; height: 36px; border: 1px solid var(--border-dark); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .stop-item h4 { font-size: 0.85rem; font-weight: 700; color: var(--paper); margin-bottom: 3px; }
+    .stop-item p { font-size: 0.75rem; color: rgba(242,239,232,0.35); line-height: 1.6; }
+
+    /* ── COMPARISON TABLE ── */
+    .comp-wrap { overflow-x: auto; }
+    .comp-t { width: 100%; border-collapse: collapse; }
+    .comp-t th { padding: 12px 16px; font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; text-align: center; border-bottom: 2px solid var(--border-dark); color: rgba(242,239,232,0.35); background: var(--ink); }
+    .comp-t th:first-child { text-align: left; }
+    .comp-t th.ev { background: rgba(61,107,90,0.12); color: var(--sage-light); border-bottom-color: var(--sage); }
+    .comp-t td { padding: 11px 16px; text-align: center; border-bottom: 1px solid var(--border-dark); font-size: 0.8rem; color: rgba(242,239,232,0.4); background: var(--ink2); }
+    .comp-t td:first-child { text-align: left; color: rgba(242,239,232,0.65); font-size: 0.78rem; font-weight: 500; }
+    .comp-t td.ev { background: rgba(61,107,90,0.06); color: var(--sage-light); font-weight: 600; }
+    .comp-t tr:last-child td { border-bottom: none; }
+    .comp-t .section-row td { background: rgba(242,239,232,0.03); font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.2); padding: 7px 16px; text-align: left; }
+    .tick { color: var(--sage-light); font-size: 0.9rem; }
+    .tickb { color: #6b9ade; font-size: 0.9rem; }
+    .cross { color: rgba(242,239,232,0.12); font-size: 0.9rem; }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      border: 1px solid var(--border-dark);
+      border-radius: 2px;
+      padding: 64px 72px;
+      text-align: center;
+      position: relative; overflow: hidden;
+      background: linear-gradient(135deg, rgba(61,107,90,0.12) 0%, rgba(28,61,122,0.12) 100%);
+    }
+    .cta-banner::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(61,107,90,0.12) 0%, transparent 70%); pointer-events: none; }
+    .cta-banner h2 { font-family: 'Cormorant Garamond', serif; font-size: clamp(2.2rem, 4vw, 3.5rem); font-weight: 300; letter-spacing: -0.02em; color: var(--paper); margin-bottom: 12px; position: relative; }
+    .cta-banner p { font-size: 0.85rem; color: rgba(242,239,232,0.4); margin-bottom: 28px; position: relative; line-height: 1.75; }
+    .cta-banner .hero-btns { justify-content: center; position: relative; }
+
+    /* ── CONTACT ── */
+    .contact-wrap { max-width: 640px; margin: 0 auto; }
+    .contact-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cf-group { display: flex; flex-direction: column; gap: 5px; }
+    .cf-group.full { grid-column: 1 / -1; }
+    .cf-label { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(242,239,232,0.35); }
+    .cf-label span { color: var(--sage-light); }
+    .cf-in, .cf-ta {
+      background: rgba(242,239,232,0.04);
+      border: 1px solid var(--border-dark);
+      border-radius: 3px; padding: 10px 12px;
+      font-family: 'Syne', sans-serif; font-size: 0.8rem;
+      color: var(--paper);
+      transition: all 0.2s;
+    }
+    .cf-in::placeholder, .cf-ta::placeholder { color: rgba(242,239,232,0.2); }
+    .cf-in:focus, .cf-ta:focus { outline: none; border-color: var(--sage); background: rgba(242,239,232,0.06); }
+    .cf-ta { resize: vertical; min-height: 100px; }
+    .cf-submit {
+      width: 100%; margin-top: 8px;
+      padding: 13px; background: var(--sage);
+      color: white; border: none; border-radius: 3px;
+      font-family: 'Syne', sans-serif; font-size: 0.82rem; font-weight: 700;
+      letter-spacing: 0.06em; cursor: pointer;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .cf-submit:hover:not(:disabled) { background: var(--sage-light); transform: translateY(-1px); }
+    .cf-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .cf-submit.cobalt { background: var(--cobalt); }
+    .cf-submit.cobalt:hover:not(:disabled) { background: var(--cobalt-light); }
+
+    /* ── FOOTER ── */
+    .footer {
+      background: var(--ink);
+      border-top: 1px solid var(--border-dark);
+      padding: 60px 80px 36px;
+    }
+    .footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
+    .footer-brand-name { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--paper); margin-bottom: 8px; letter-spacing: 0.03em; }
+    .footer-brand-p { font-size: 0.76rem; color: rgba(242,239,232,0.25); line-height: 1.7; margin-bottom: 14px; }
+    .footer-col-h { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(242,239,232,0.25); margin-bottom: 16px; }
+    .footer-col a { display: block; font-size: 0.78rem; color: rgba(242,239,232,0.35); text-decoration: none; margin-bottom: 9px; transition: color 0.2s; }
+    .footer-col a:hover { color: var(--paper); }
+    .footer-email { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: rgba(242,239,232,0.35); margin-bottom: 10px; text-decoration: none; display: block; }
+    .footer-email:hover { color: var(--sage-light); }
+    .li-link { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border-dark); border-radius: 3px; font-size: 0.72rem; font-weight: 700; color: rgba(242,239,232,0.3); text-decoration: none; transition: all 0.2s; }
+    .li-link:hover { border-color: var(--cobalt-light); color: #6b9ade; }
+    .footer-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 28px; border-top: 1px solid var(--border-dark); }
+    .footer-copy { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.08em; color: rgba(242,239,232,0.18); }
+
+    /* ── MODAL ── */
+    .modal-ov { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .modal {
+      background: var(--ink2);
+      border: 1px solid var(--border-dark);
+      border-radius: 6px; padding: 40px;
+      max-width: 500px; width: 100%;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+      animation: slideUp 0.3s;
+      max-height: 90vh; overflow-y: auto;
+      position: relative;
+    }
+    .modal-x { position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; background: var(--mist); border: 1px solid var(--border-dark); border-radius: 4px; color: rgba(242,239,232,0.4); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .modal-x:hover { color: var(--paper); border-color: rgba(242,239,232,0.2); }
+    .modal-h { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 400; color: var(--paper); margin-bottom: 6px; }
+    .modal-p { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: rgba(242,239,232,0.3); margin-bottom: 24px; letter-spacing: 0.04em; }
+
+    /* ── SPINNER ── */
+    .spin { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: rot 0.6s linear infinite; }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .hero, .sec, .footer { padding-left: 24px; padding-right: 24px; }
+      .split { grid-template-columns: 1fr; }
+      .split-l, .split-r { padding: 48px 24px; }
+      .split-r.border-l { border-left: none; border-top: 1px solid var(--border-dark); }
+      .grid3, .fraud-grid { grid-template-columns: 1fr; background: none; gap: 1px; }
+      .grid3-card { border: 1px solid var(--border-dark); }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step-item:nth-child(2) { border-right: none; }
+      .metrics-strip { grid-template-columns: 1fr; }
+      .metric-cell { border-right: none; border-bottom: 1px solid var(--border-dark); }
+      .footer-top { grid-template-columns: 1fr 1fr; gap: 28px; }
+      .footer { padding: 40px 24px 28px; }
+      .path-row { grid-template-columns: 1fr; }
+      .contact-form-grid { grid-template-columns: 1fr; }
+      .home-hero, .home-center { padding: 60px 24px; }
+      .cta-banner { padding: 48px 24px; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect } = React;
+
+  // ─── NAV ───
+  const Nav = ({ mode, onToggle, onDemo }) => {
+    const [scrolled, setScrolled] = useState(false);
+    useEffect(() => {
+      const fn = () => setScrolled(window.scrollY > 10);
+      window.addEventListener('scroll', fn);
+      return () => window.removeEventListener('scroll', fn);
+    }, []);
+
+    const isHome = mode === 'home';
+    const isProv = mode === 'providers';
+
+    const provLinks = ['Home','How It Works','Benefits','FAQ','Blog'];
+    const payLinks  = ['Home','How It Works','ROI','FAQ','Blog'];
+    const homeLinks = ['Home','How It Works','ROI','FAQ','Blog'];
+    const links = isProv ? provLinks : mode === 'payers' ? payLinks : homeLinks;
+
+    return (
+      <nav className={`nav${scrolled ? ' scrolled' : ''}`}>
+        <div className="nav-brand" onClick={() => { onToggle('home'); window.scrollTo({top:0}); }}>
+          <div className="nav-mark">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="#4f8a72" strokeWidth="1.2"/>
+              <path d="M4 7L6.5 9.5L10.5 4.5" stroke="#4f8a72" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <span className="nav-name">EvidentABA</span>
+        </div>
+
+        <div className="nav-links">
+          {links.map((l,i) => <a key={i} href="#">{l}</a>)}
+        </div>
+
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+          {!isHome && (
+            <button className="nav-toggle" onClick={() => { onToggle(isProv ? 'payers' : 'providers'); window.scrollTo({top:0}); }}>
+              <div className="nav-dot" style={{background: isProv ? '#4f8a72' : '#6b9ade'}} />
+              {isProv ? '⇄ For Payors?' : '⇄ For Providers?'}
+            </button>
+          )}
+          <button className="nav-cta" onClick={onDemo}>Book a Demo</button>
+        </div>
+      </nav>
+    );
+  };
+
+  // ─── CONTACT FORM ───
+  const ContactForm = ({ accent = 'sage' }) => {
+    const [done, setDone] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const go = e => { e.preventDefault(); setBusy(true); setTimeout(() => { setBusy(false); setDone(true); }, 1100); };
+    return (
+      <div className="sec sec-dark2" id="contact">
+        <div className="contact-wrap">
+          <div style={{textAlign:'center', marginBottom:'44px'}}>
+            <span className="mono-label sage">Contact</span>
+            <h2 className="sec-h">Get in Touch</h2>
+            <p className="sec-p center">Ready to transform your ABA therapy oversight? Schedule a demo to see EvidentABA in action.</p>
+          </div>
+          {done ? (
+            <div style={{textAlign:'center', padding:'40px', border:'1px solid var(--border-dark)', borderRadius:'4px'}}>
+              <div style={{fontFamily:"'Cormorant Garamond', serif", fontSize:'3rem', marginBottom:'12px'}}>✓</div>
+              <h3 style={{fontFamily:"'Cormorant Garamond', serif", fontSize:'1.8rem', fontWeight:300, color:'var(--paper)', marginBottom:'8px'}}>Demo Scheduled</h3>
+              <p style={{fontFamily:"'DM Mono', monospace", fontSize:'0.68rem', color:'rgba(242,239,232,0.3)', letterSpacing:'0.06em'}}>We'll be in touch within one business day.</p>
+            </div>
+          ) : (
+            <form onSubmit={go}>
+              <div className="contact-form-grid">
+                <div className="cf-group"><label className="cf-label">First Name <span>*</span></label><input className="cf-in" type="text" placeholder="John" required /></div>
+                <div className="cf-group"><label className="cf-label">Last Name <span>*</span></label><input className="cf-in" type="text" placeholder="Doe" required /></div>
+                <div className="cf-group full"><label className="cf-label">Email <span>*</span></label><input className="cf-in" type="email" placeholder="john.doe@example.com" required /></div>
+                <div className="cf-group full"><label className="cf-label">Organization <span>*</span></label><input className="cf-in" type="text" placeholder="Your organization name" required /></div>
+                <div className="cf-group full"><label className="cf-label">Phone Number</label><input className="cf-in" type="tel" placeholder="(555) 123-4567" /></div>
+                <div className="cf-group full"><label className="cf-label">Message <span>*</span></label><textarea className="cf-ta" placeholder="Tell us about your needs..." required /></div>
+              </div>
+              <button type="submit" className={`cf-submit${accent === 'cobalt' ? ' cobalt' : ''}`} disabled={busy}>
+                {busy ? <><div className="spin"/>Sending...</> : 'Schedule a Demo'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── FOOTER ───
+  const Footer = () => (
+    <footer className="footer">
+      <div className="footer-top">
+        <div>
+          <div className="footer-brand-name">EvidentABA</div>
+          <p className="footer-brand-p">Elevating ABA Therapy Standards</p>
+          <a href="#" style={{fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', color:'rgba(242,239,232,0.25)', textDecoration:'none', letterSpacing:'0.06em'}}>Blog</a>
+        </div>
+        <div className="footer-col">
+          <div className="footer-col-h">For Providers</div>
+          <a href="#">Home</a><a href="#">How It Works</a><a href="#">Benefits</a><a href="#">FAQ</a><a href="#">About Us</a>
+        </div>
+        <div className="footer-col">
+          <div className="footer-col-h">For Payors</div>
+          <a href="#">Home</a><a href="#">How It Works</a><a href="#">ROI Calculator</a><a href="#">FAQ</a><a href="#">About Us</a>
+        </div>
+        <div className="footer-col">
+          <div className="footer-col-h">Contact</div>
+          <a href="mailto:contact@evidentaba.com" className="footer-email">contact@evidentaba.com</a>
+          <a href="#" className="li-link">in</a>
+        </div>
+      </div>
+      <div className="footer-bottom">
+        <span className="footer-copy">© 2025 EvidentABA. All rights reserved.</span>
+      </div>
+    </footer>
+  );
+
+  // ─── HOME ───
+  const Home = ({ onNav, onDemo }) => (
+    <div>
+      <div className="home">
+        <div className="home-center">
+          <div className="home-eyebrow">AI-Powered ABA Therapy Verification Platform</div>
+          <h1 className="home-h1">Choose<br/>Your <em>Path</em></h1>
+          <p className="home-sub">Select your role to explore tailored solutions designed specifically for your organization's needs</p>
+          <div className="path-row">
+            <div className="path-tile sage-t" onClick={() => { onNav('providers'); window.scrollTo({top:0}); }}>
+              <span className="path-tile-no">01 / PROVIDERS</span>
+              <h2>ABA Therapy Providers</h2>
+              <p className="tile-desc">Reduce documentation burden and unlock value-based care opportunities</p>
+              <ul className="tile-bullets">
+                {['90% less time on documentation','Faster claim approvals','Higher reimbursement rates','Strengthen family relationships'].map((t,i) => (
+                  <li key={i}><div style={{width:4,height:4,borderRadius:'50%',background:'var(--sage-light)',flexShrink:0}}/>{t}</li>
+                ))}
+              </ul>
+              <span className="tile-arrow sage">Explore Provider Solutions →</span>
+            </div>
+            <div className="path-tile cobalt-t" onClick={() => { onNav('payers'); window.scrollTo({top:0}); }}>
+              <span className="path-tile-no">02 / PAYERS</span>
+              <h2>MCOs &amp; State Agencies</h2>
+              <p className="tile-desc">Prevent fraud and improve network quality with AI-powered oversight</p>
+              <ul className="tile-bullets">
+                {['Save up to $25M annually','10-15% reduction in fraud','100% visit verification','Audit-ready documentation'].map((t,i) => (
+                  <li key={i}><div style={{width:4,height:4,borderRadius:'50%',background:'#6b9ade',flexShrink:0}}/>{t}</li>
+                ))}
+              </ul>
+              <span className="tile-arrow cobalt">Explore Payer Solutions →</span>
+            </div>
+          </div>
+          <p className="home-note">
+            Not sure which path is right for you?{' '}
+            <a href="#">View our FAQ</a> or <a href="#" onClick={e=>{e.preventDefault();onDemo();}}>contact us</a> for guidance.
+          </p>
+        </div>
+      </div>
+      <ContactForm />
+      <Footer />
+    </div>
+  );
+
+  // ─── PROVIDERS PAGE ───
+  const Providers = ({ onDemo }) => (
+    <div className="page">
+      <div className="hero sage-hero">
+        <div className="hero-inner">
+          <div className="hero-crumb"><a href="#">Home</a> <span>›</span> <span>Providers</span></div>
+          <span className="hero-label sage">For ABA Therapy Providers</span>
+          <h1 className="hero-h1">Focus on Therapy,<br/>Not Paperwork</h1>
+          <div className="hero-h2 sage">Benefit from Value-Based Care</div>
+          <p className="hero-p">Let AI handle documentation and verification while you deliver exceptional care. Get recognized and rewarded for the quality work you're already doing.</p>
+          <div className="hero-btns">
+            <button className="btn-sage" onClick={onDemo}>See How It Works →</button>
+            <button className="btn-ghost" onClick={onDemo}>Schedule a Demo</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Built for Providers */}
+      <div className="sec sec-dark2" id="benefits">
+        <div style={{textAlign:'center', marginBottom:'52px'}}>
+          <span className="mono-label sage">Built for Providers Who Care</span>
+          <h2 className="sec-h">We partner with ethical providers to reduce administrative burden and showcase clinical excellence</h2>
+        </div>
+        <div className="grid3">
+          {[
+            {no:'01',icon:'⏱',h:'90% Less Documentation Time', p:'Our AI automatically captures session notes and EVV data, giving your BCBAs and RBTs back valuable hours each week to focus on what matters most — your clients.', bullets:['Automated session notes','One-click EVV compliance','Reduce clinician burnout'], color:'sage'},
+            {no:'02',icon:'$',h:'Up to $15K More Per Patient Annually', p:'High quality scores unlock value-based care contracts with better reimbursement rates and faster claim approvals. Get paid fairly for excellent care.', bullets:['Faster claim processing','Higher reimbursement rates','Fewer denials and audits'], color:'sage'},
+            {no:'03',icon:'★',h:'Objective Quality Recognition', p:"Our AI scoring, developed by experienced BCBAs, provides unbiased assessment of your clinical excellence. Stand out in the network with data-backed quality metrics.", bullets:['Evidence-based scoring','Preferred provider status','Build family trust'], color:'sage'},
+          ].map((c,i) => (
+            <div key={i} className="grid3-card" data-no={c.no}>
+              <div className="card-icon">{c.icon}</div>
+              <h3>{c.h}</h3>
+              <p>{c.p}</p>
+              <ul className="card-bullets">{c.bullets.map((b,j)=><li key={j}><div className={`cb-dot ${c.color}`}/>{b}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Documentation Made Simple */}
+      <div id="how-it-works">
+        <div className="split">
+          <div className="split-l sec-dark">
+            <span className="mono-label sage">Documentation Made Simple</span>
+            <h2 className="sec-h" style={{marginBottom:'16px'}}>Transform hours of paperwork into <em>seconds</em></h2>
+            <p style={{fontSize:'0.83rem', color:'rgba(242,239,232,0.45)', lineHeight:1.8, marginBottom:'24px'}}>Our AI assistant captures everything that matters during ABA sessions, generating comprehensive documentation that meets all compliance requirements.</p>
+            <div style={{display:'flex', flexDirection:'column', gap:'1px', marginBottom:'28px'}}>
+              {[
+                {t:'Real-Time Session Capture', d:'Automatically records session details, interventions, and client responses as therapy happens'},
+                {t:'Intelligent Note Generation', d:'AI creates detailed, professional session notes that capture clinical insights and progress'},
+                {t:'One-Click Compliance', d:'Automatically includes all required EVV data, billing codes, and compliance checkpoints'},
+                {t:'Fully Editable', d:'Review and customize any auto-generated content to match your clinical style and needs'},
+              ].map((item,i) => (
+                <div key={i} style={{padding:'14px 16px', background:'var(--mist)', borderLeft:'2px solid var(--sage)', marginBottom:'1px'}}>
+                  <div style={{fontSize:'0.8rem', fontWeight:700, color:'var(--paper)', marginBottom:'3px'}}>{item.t}</div>
+                  <div style={{fontSize:'0.74rem', color:'rgba(242,239,232,0.35)', lineHeight:1.6}}>{item.d}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:'flex', gap:'12px', marginBottom:'28px'}}>
+              {[{n:'8+', l:'Hours saved /week'},{n:'99.9%', l:'Documentation accuracy'}].map((s,i)=>(
+                <div key={i} style={{flex:1, border:'1px solid var(--border-dark)', padding:'16px', textAlign:'center'}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:'2rem', fontWeight:300, color:'var(--sage-light)'}}>{s.n}</div>
+                  <div style={{fontFamily:"'DM Mono',monospace", fontSize:'0.62rem', color:'rgba(242,239,232,0.25)', letterSpacing:'0.1em', marginTop:'4px'}}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+            <button className="btn-sage" onClick={onDemo}>See It In Action</button>
+          </div>
+          <div className="split-r border-l sec-dark" style={{display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div className="mock" style={{width:'100%', maxWidth:'380px'}}>
+              <div className="mock-topbar">
+                <div className="mdot" style={{background:'#f87171'}}/><div className="mdot" style={{background:'#fbbf24'}}/><div className="mdot" style={{background:'#4ade80'}}/>
+                <span className="mock-title">EvidentABA Session Capture</span>
+              </div>
+              <div className="mock-body">
+                <div className="mock-client-hd">CLIENT</div>
+                <div className="mock-session-hd">Sarah M. — Session #42 • 2:00–3:30 PM</div>
+                <div className="mock-status"><div className="mock-status-dot"/>Recording</div>
+                <div className="mock-field"><span className="mock-field-l">Date &amp; Duration</span><span className="mock-field-r">Nov 21, 2024 • 90 min</span></div>
+                <div className="mock-field"><span className="mock-field-l">Therapy Focus</span><span className="mock-field-r">Social Skills &amp; Communication</span></div>
+                <div className="mock-notes">Sarah showed excellent progress with turn-taking activities. Successfully completed 8/10 trials for requesting preferred items using full sentences. Responded well to visual prompts...</div>
+                <div className="mock-score">
+                  <span className="mock-ai">AI-POWERED</span>
+                  <div className="mock-score-n">92/100</div>
+                  <div className="mock-score-l">QUALITY SCORE</div>
+                </div>
+                <button className="mock-complete">Complete Session ✓</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Simple Integration */}
+      <div className="sec sec-dark2" style={{textAlign:'center'}}>
+        <span className="mono-label sage">Simple Integration, Powerful Results</span>
+        <h2 className="sec-h">EvidentABA fits seamlessly into your existing workflow</h2>
+        <div style={{height:'36px'}}/>
+        <div className="steps">
+          {[
+            {n:'01', t:'Quick Setup', d:'Download the app and onboard your team in minutes'},
+            {n:'02', t:'Record Sessions', d:'Our app automatically captures EVV data during therapy'},
+            {n:'03', t:'AI Analysis', d:'Sessions are scored based on clinical best practices'},
+            {n:'04', t:'Get Recognized', d:'Quality scores unlock better contracts and faster approvals'},
+          ].map((s,i) => (
+            <div key={i} className="step-item">
+              <div className="step-no">{s.n}</div>
+              <h4>{s.t}</h4>
+              <p>{s.d}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:'32px'}}>
+          <button className="btn-sage" onClick={onDemo}>Learn More About Our Process</button>
+        </div>
+      </div>
+
+      {/* Metrics Strip */}
+      <div className="metrics-strip">
+        {[
+          {n:'$56M', hl:' → $656M', l:'Indiana Medicaid Growth (2020–2024)'},
+          {n:'10–15%', hl:'', l:'Annual Improper Spending in ABA therapy budgets'},
+          {n:'0%', hl:'', l:'Sessions unverified — no proof of delivery or quality'},
+        ].map((m,i) => (
+          <div key={i} className="metric-cell">
+            <div className="metric-n">{m.n}<span className="hl">{m.hl}</span></div>
+            <div className="metric-l">{m.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ROI + CTA */}
+      <div className="sec sec-dark">
+        <div className="cta-banner">
+          <h2>Calculate Your Savings</h2>
+          <p>See how much time and money your practice could save with EvidentABA.<br/>Most providers see ROI within the first month.</p>
+          <div className="hero-btns" style={{justifyContent:'center'}}>
+            <button className="btn-sage" onClick={onDemo}>Calculate Your ROI</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Join Revolution */}
+      <div className="sec sec-sage" style={{textAlign:'center'}}>
+        <span className="mono-label sage">Join the Quality Revolution</span>
+        <h2 className="sec-h">Partner with EvidentABA to reduce administrative burden and get recognized for your clinical excellence</h2>
+        <div style={{display:'flex', gap:'12px', justifyContent:'center', marginTop:'8px'}}>
+          <button className="btn-sage" onClick={onDemo}>Get Started Today</button>
+          <button className="btn-ghost" onClick={onDemo}>View Provider FAQ</button>
+        </div>
+      </div>
+
+      <ContactForm accent="sage" />
+      <Footer />
+    </div>
+  );
+
+  // ─── PAYERS PAGE ───
+  const Payers = ({ onDemo }) => (
+    <div className="page">
+      <div className="hero cobalt-hero">
+        <div className="hero-inner">
+          <span className="hero-label cobalt">For MCOs &amp; State Agencies</span>
+          <h1 className="hero-h1">Protect Resources.<br/>Ensure Quality.</h1>
+          <p className="hero-p">AI-powered fraud prevention and quality oversight for ABA therapy networks. Save millions while ensuring every child receives legitimate, high-quality care.</p>
+          <div className="hero-btns">
+            <button className="btn-cobalt" onClick={onDemo}>See Your Potential Savings</button>
+            <button className="btn-ghost" onClick={onDemo}>Request Executive Briefing</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Measurable Impact */}
+      <div className="sec sec-dark2" style={{textAlign:'center'}}>
+        <span className="mono-label cobalt">Measurable Impact on Your Bottom Line</span>
+        <h2 className="sec-h">Data-driven oversight that transforms compliance from a cost center to a value driver</h2>
+        <div style={{height:'44px'}}/>
+        <div className="grid3">
+          {[
+            {no:'01',icon:'$',h:'$25M Average Annual Savings Per State', p:'Comprehensive fraud prevention and quality oversight delivers immediate ROI through reduced fraudulent claims and improved network efficiency.', bullets:['10–15% reduction in fraudulent billing','Faster identification of bad actors','Proactive risk mitigation'], color:'cobalt'},
+            {no:'02',icon:'✓',h:'100% Visit Verification Coverage', p:'Every session is automatically verified and documented with EVV data and quality metrics, ensuring complete audit readiness and regulatory compliance.', bullets:['CMS EVV compliance built-in','Audit-ready documentation','Real-time compliance monitoring'], color:'cobalt'},
+            {no:'03',icon:'◎',h:'94% Quality Score Accuracy', p:'AI models developed by BCBAs provide objective quality assessment, enabling value-based care contracts and network quality improvement initiatives.', bullets:['Identify high-performing providers','Support quality improvement','Enable value-based contracts'], color:'cobalt'},
+          ].map((c,i) => (
+            <div key={i} className="grid3-card" data-no={c.no}>
+              <div className="card-icon">{c.icon}</div>
+              <h3>{c.h}</h3>
+              <p>{c.p}</p>
+              <ul className="card-bullets">{c.bullets.map((b,j)=><li key={j}><div className={`cb-dot ${c.color}`}/>{b}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Hidden Cost / Fraud */}
+      <div className="sec sec-dark" id="how-it-works">
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'64px', alignItems:'start'}}>
+          <div>
+            <span className="mono-label gold">The Hidden Cost of ABA Fraud</span>
+            <h2 className="sec-h" style={{marginBottom:'12px'}}>Federal investigations show 10–15% of ABA billing is fraudulent.</h2>
+            <p style={{fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', letterSpacing:'0.08em', color:'rgba(242,239,232,0.25)', marginBottom:'24px'}}>COMMON FRAUD SCHEMES WE PREVENT</p>
+            <div className="fraud-grid">
+              {[
+                {tag:'Ghost Billing', h:'Services billed but never provided', p:'AI cross-references claim submissions against verified EVV data in real time.'},
+                {tag:'Upcoding', h:'Billing for higher-level services than delivered', p:'Session quality scoring catches discrepancies between billed codes and actual service.'},
+                {tag:'Unlicensed Providers', h:'Unqualified staff delivering services', p:'Credential verification flags providers who lack required licensure for billed services.'},
+                {tag:'Location Fraud', h:'Services claimed at incorrect locations', p:'GPS-verified EVV confirms exact service delivery location for every session.'},
+              ].map((f,i) => (
+                <div key={i} className="fraud-cell">
+                  <div className="fraud-tag">{f.tag}</div>
+                  <h4>{f.h}</h4>
+                  <p>{f.p}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p style={{fontFamily:"'DM Mono',monospace", fontSize:'0.65rem', letterSpacing:'0.15em', textTransform:'uppercase', color:'rgba(242,239,232,0.25)', marginBottom:'20px'}}>How EvidentABA Stops Fraud</p>
+            <div className="stop-list">
+              {[
+                {icon:'⚡', h:'Real-Time Verification', p:'Every session recorded and verified instantly'},
+                {icon:'🤖', h:'AI Pattern Detection', p:'Identifies suspicious billing patterns automatically'},
+                {icon:'★', h:'Quality Validation', p:'Ensures services meet clinical standards'},
+                {icon:'📄', h:'Complete Documentation', p:'Audit trail for every claim submitted'},
+              ].map((s,i) => (
+                <div key={i} className="stop-item">
+                  <div className="stop-ico">{s.icon}</div>
+                  <div><h4>{s.h}</h4><p>{s.p}</p></div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:'24px'}}>
+              <button className="btn-cobalt" onClick={onDemo}>Explore Full Benefits</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Why EvidentABA Is Different */}
+      <div className="sec sec-dark2" id="roi">
+        <div style={{textAlign:'center', marginBottom:'48px'}}>
+          <span className="mono-label cobalt">Why EvidentABA Is Different</span>
+          <h2 className="sec-h">The only platform purpose-built for autism therapy verification with real-time quality measurement and AI-powered oversight</h2>
+        </div>
+        <div className="comp-wrap">
+          <table className="comp-t">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Ankota</th><th>Therap</th><th>HHAeXchange</th><th>WellSky</th><th>AllGeo</th>
+                <th className="ev">EvidentABA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="section-row"><td colSpan="7">Basic Tracking</td></tr>
+              {['Type of Service','Date of Service','Duration','Location'].map((label,i) => (
+                <tr key={i}><td>{label}</td>{[0,1,2,3,4].map(j=><td key={j}><span className="tick">✓</span></td>)}<td className="ev"><span className="tickb">✓</span></td></tr>
+              ))}
+              <tr className="section-row"><td colSpan="7">Advanced Capabilities</td></tr>
+              {[
+                ['Oversight Capability',[false,false,false,false,false]],
+                ['Quality Measurement',[false,false,false,false,false]],
+                ['Autism Therapy Focus',[false,false,false,false,false]],
+                ['AI Native Platform',[false,false,false,false,false]],
+                ['Mobile Based Solution',[true,true,false,true,true]],
+                ['Documentation for ABA Sessions',[false,false,false,false,false]],
+              ].map(([label,vals],i) => (
+                <tr key={i}><td>{label}</td>{vals.map((v,j)=><td key={j}>{v?<span className="tick">✓</span>:<span className="cross">—</span>}</td>)}<td className="ev"><span className="tickb">✓</span></td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{display:'flex', gap:'1px', marginTop:'1px', background:'var(--border-dark)'}}>
+          {[
+            {n:'5/5', l:'Only platform with all advanced capabilities for autism therapy oversight'},
+            {n:'100%', l:'Real-time quality measurement and verification, not just billing data'},
+            {n:'AI', l:'Purpose-built with behavioral AI specifically trained on autism therapy'},
+          ].map((s,i) => (
+            <div key={i} style={{flex:1, padding:'24px', textAlign:'center', background:'var(--ink2)'}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:'2rem', fontWeight:300, color:'#6b9ade', marginBottom:'6px'}}>{s.n}</div>
+              <div style={{fontFamily:"'DM Mono',monospace", fontSize:'0.62rem', color:'rgba(242,239,232,0.25)', letterSpacing:'0.06em', lineHeight:1.6}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Key Differentiators */}
+      <div className="sec sec-cobalt" style={{textAlign:'center'}}>
+        <span className="mono-label cobalt">Key Differentiators for MCOs &amp; State Agencies</span>
+        <div style={{height:'36px'}}/>
+        <div className="grid3">
+          {[
+            {no:'01',icon:'🔬',h:'Beyond Basic Compliance', p:'While competitors offer simple check-in/check-out tracking, EvidentABA provides real-time session verification, quality scoring, and fraud pattern detection specifically designed for ABA therapy oversight.'},
+            {no:'02',icon:'📈',h:'ROI Through Prevention', p:"Our AI-native platform doesn't just track services — it prevents improper payments before they happen, saving an average of $25M annually per state program while improving care quality."},
+            {no:'03',icon:'⚙',h:'Enterprise-Ready Implementation', p:'Seamless integration with your existing infrastructure and workflows. Collaborative rollout strategy, provider onboarding, and secure data integration with ongoing optimization.'},
+          ].map((c,i) => (
+            <div key={i} className="grid3-card" data-no={c.no} style={{background:'rgba(13,15,20,0.5)'}}>
+              <div className="card-icon">{c.icon}</div>
+              <h3>{c.h}</h3>
+              <p>{c.p}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Implementation Steps */}
+      <div className="sec sec-dark2" style={{textAlign:'center'}}>
+        <span className="mono-label cobalt">Enterprise-Ready Implementation</span>
+        <h2 className="sec-h">Seamless integration with your existing infrastructure and workflows</h2>
+        <div style={{height:'32px'}}/>
+        <div className="steps">
+          {[
+            {n:'01',t:'Strategic Planning',d:'Collaborative design of rollout strategy and success metrics'},
+            {n:'02',t:'Network Integration',d:'Provider onboarding with minimal disruption'},
+            {n:'03',t:'Data Flow Setup',d:'Secure integration with claims and clinical systems'},
+            {n:'04',t:'Ongoing Optimization',d:'Continuous monitoring and improvement of outcomes'},
+          ].map((s,i) => (
+            <div key={i} className="step-item">
+              <div className="step-no">{s.n}</div>
+              <h4>{s.t}</h4>
+              <p>{s.d}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:'32px'}}>
+          <button className="btn-cobalt" onClick={onDemo}>View Implementation Details</button>
+        </div>
+      </div>
+
+      {/* Metrics */}
+      <div className="metrics-strip">
+        {[
+          {n:'$56M', hl:' → $656M', l:'Indiana Medicaid Growth (2020–2024)'},
+          {n:'10–15%', hl:'', l:'Annual Improper Spending in ABA therapy budgets'},
+          {n:'0%', hl:'', l:'Sessions unverified — no proof of delivery or quality'},
+        ].map((m,i) => (
+          <div key={i} className="metric-cell">
+            <div className="metric-n">{m.n}<span className="hl">{m.hl}</span></div>
+            <div className="metric-l">{m.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Final CTA */}
+      <div className="sec sec-dark">
+        <div className="cta-banner">
+          <h2>Ready to Save Millions?</h2>
+          <p>Join state agencies and MCOs already using EvidentABA to transform their ABA oversight</p>
+          <div className="hero-btns" style={{justifyContent:'center'}}>
+            <button className="btn-cobalt" onClick={onDemo}>Schedule Executive Briefing</button>
+            <button className="btn-ghost-white" onClick={onDemo}>Calculate Your Savings</button>
+          </div>
+        </div>
+      </div>
+
+      <ContactForm accent="cobalt" />
+      <Footer />
+    </div>
+  );
+
+  // ─── DEMO MODAL ───
+  const DemoModal = ({ onClose }) => {
+    const [done, setDone] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const go = e => { e.preventDefault(); setBusy(true); setTimeout(() => { setBusy(false); setDone(true); }, 1100); };
+    return (
+      <div className="modal-ov" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal">
+          <button className="modal-x" onClick={onClose}>✕</button>
+          {done ? (
+            <div style={{textAlign:'center', padding:'24px 0'}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:'4rem', color:'var(--sage-light)', marginBottom:'12px', fontWeight:300}}>✓</div>
+              <h2 className="modal-h">Demo Scheduled</h2>
+              <p className="modal-p">We'll be in touch within one business day to confirm your time.</p>
+              <button className="btn-sage" style={{margin:'0 auto'}} onClick={onClose}>Close</button>
+            </div>
+          ) : (
+            <>
+              <h2 className="modal-h">Book a Demo</h2>
+              <p className="modal-p">Schedule a personalized demo to see EvidentABA in action.</p>
+              <form onSubmit={go}>
+                <div className="contact-form-grid">
+                  <div className="cf-group"><label className="cf-label">First Name <span>*</span></label><input className="cf-in" type="text" placeholder="John" required /></div>
+                  <div className="cf-group"><label className="cf-label">Last Name <span>*</span></label><input className="cf-in" type="text" placeholder="Doe" required /></div>
+                  <div className="cf-group full"><label className="cf-label">Email <span>*</span></label><input className="cf-in" type="email" placeholder="john.doe@example.com" required /></div>
+                  <div className="cf-group full"><label className="cf-label">Organization <span>*</span></label><input className="cf-in" type="text" placeholder="Your organization" required /></div>
+                  <div className="cf-group full"><label className="cf-label">Phone Number</label><input className="cf-in" type="tel" placeholder="(555) 123-4567" /></div>
+                  <div className="cf-group full"><label className="cf-label">Message <span>*</span></label><textarea className="cf-ta" placeholder="Tell us about your needs..." required /></div>
+                </div>
+                <button type="submit" className="cf-submit" disabled={busy}>
+                  {busy ? <><div className="spin"/>Sending...</> : 'Schedule a Demo'}
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── APP ───
+  const App = () => {
+    const [mode, setMode] = useState('home');
+    const [modal, setModal] = useState(false);
+    const nav = m => { setMode(m); setTimeout(() => window.scrollTo({top:0, behavior:'smooth'}), 10); };
+    return (
+      <>
+        <Nav mode={mode} onToggle={nav} onDemo={() => setModal(true)} />
+        {mode === 'home'      && <Home      onNav={nav} onDemo={() => setModal(true)} />}
+        {mode === 'providers' && <Providers onDemo={() => setModal(true)} />}
+        {mode === 'payers'    && <Payers    onDemo={() => setModal(true)} />}
+        {modal && <DemoModal onClose={() => setModal(false)} />}
+      </>
+    );
+  };
+
+  ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>

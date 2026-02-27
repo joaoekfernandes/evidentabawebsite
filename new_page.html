@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EvidentABA — AI-Powered ABA Therapy Verification</title>
+  <meta name="description" content="The first smartphone platform that verifies ABA therapy sessions in real time using computer vision and behavioral AI. Trusted by state Medicaid programs and leading MCOs."/>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet"/>
+
+  <!-- App JS — function definitions (must load before Alpine) -->
+  <script>
+function heroFallback() {
+  return `<div style="min-height:420px; background:linear-gradient(135deg,rgba(41,171,226,0.15),rgba(27,58,107,0.25)); display:flex; align-items:center; justify-content:center;">
+    <svg width="80" height="80" fill="none" stroke="rgba(255,255,255,0.4)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+  </div>`;
+}
+
+// ── Alpine root ──────────────────────────────────────────────────────────────
+function app() {
+  return {
+    scrolled: false,
+    mobileOpen: false,
+    audience: 'providers',
+    setAudience(val) {
+      this.audience = val;
+      this.$nextTick(() => buildFAQ(val));
+    },
+    hiwStep: 1,
+
+    init() {
+      window.addEventListener('scroll', () => {
+        this.scrolled = window.scrollY > 10;
+      }, { passive: true });
+
+      this.$nextTick(() => {
+        buildRings();
+        initStickyScroll(this);
+        initReveal();
+        buildFAQ(this.audience);
+      });
+    },
+
+    goto(id) {
+      const el = document.getElementById(id);
+      if (el) { el.scrollIntoView({ behavior: 'smooth' }); this.mobileOpen = false; }
+    }
+  };
+}
+
+// ── ROI calc ─────────────────────────────────────────────────────────────────
+function roiCalc() {
+  return { type: 'provider', therapists: 10, abaSpend: 100 };
+}
+
+// ── Contact form ─────────────────────────────────────────────────────────────
+function contactForm() {
+  return {
+    f: { first:'', last:'', email:'', org:'', phone:'', role:'', msg:'' },
+    busy: false, done: false,
+    async submit() {
+      this.busy = true;
+      await new Promise(r => setTimeout(r, 1400));
+      this.busy = false; this.done = true;
+      this.f = { first:'', last:'', email:'', org:'', phone:'', role:'', msg:'' };
+    }
+  };
+}
+
+// ── Hero rings (SVG) ─────────────────────────────────────────────────────────
+function buildRings() {
+  function arcPath(cx, cy, r1, r2, startDeg, endDeg) {
+    const toRad = d => d * Math.PI / 180;
+    const s = toRad(startDeg), e = toRad(endDeg);
+    const cos = Math.cos, sin = Math.sin;
+    const x1 = cx + r1*cos(s), y1 = cy + r1*sin(s);
+    const x2 = cx + r2*cos(s), y2 = cy + r2*sin(s);
+    const x3 = cx + r2*cos(e), y3 = cy + r2*sin(e);
+    const x4 = cx + r1*cos(e), y4 = cy + r1*sin(e);
+    const large = (endDeg - startDeg) > 180 ? 1 : 0;
+    return `M${x1},${y1} L${x2},${y2} A${r2},${r2},0,${large},1,${x3},${y3} L${x4},${y4} A${r1},${r1},0,${large},0,${x1},${y1}Z`;
+  }
+
+  function lerp(a, b, t) { return Math.round(a + (b-a)*t); }
+
+  function buildSegments(containerId, cx, cy, r1, r2, n, gap, colorA, colorB) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const span = 360/n - gap;
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const r = lerp(colorA[0], colorB[0], t);
+      const g = lerp(colorA[1], colorB[1], t);
+      const b = lerp(colorA[2], colorB[2], t);
+      const startDeg = -90 + i * (360/n);
+      const endDeg   = startDeg + span;
+      html += `<path d="${arcPath(cx,cy,r1,r2,startDeg,endDeg)}" fill="rgb(${r},${g},${b})" opacity="0.92"/>`;
+    }
+    el.innerHTML = html;
+  }
+
+  buildSegments('outer-ring', 250, 250, 120, 215, 22, 3.5,
+    [27, 58, 107],
+    [41, 171, 226]
+  );
+  buildSegments('inner-ring', 250, 250, 68, 108, 14, 5,
+    [41, 171, 226],
+    [27, 58, 107]
+  );
+}
+
+// ── Sticky scroll — How It Works ─────────────────────────────────────────────
+function initStickyScroll(alpine) {
+  const panels = document.querySelectorAll('.hiw-step-panel');
+  if (!panels.length) return;
+
+  const indicators = document.querySelectorAll('.hiw-step-item');
+  const fill = document.getElementById('hiw-fill');
+
+  function updateProgress(step) {
+    alpine.hiwStep = step;
+    indicators.forEach((ind, i) => {
+      ind.classList.toggle('active', i < step);
+    });
+    if (fill) {
+      const pct = step === 1 ? 0 : step === 2 ? 50 : 100;
+      fill.style.height = pct + '%';
+    }
+  }
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const step = parseInt(entry.target.dataset.step);
+      if (entry.isIntersecting) {
+        updateProgress(step);
+        entry.target.classList.add('hiw-active');
+      } else {
+        entry.target.classList.remove('hiw-active');
+      }
+    });
+  }, { threshold: 0.45, rootMargin: '-80px 0px -20% 0px' });
+
+  panels.forEach(p => obs.observe(p));
+  updateProgress(1);
+}
+
+// ── Scroll reveal ─────────────────────────────────────────────────────────────
+function initReveal() {
+  const els = document.querySelectorAll('.reveal');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  els.forEach(el => obs.observe(el));
+}
+
+// ── FAQ ───────────────────────────────────────────────────────────────────────
+const faqData = {
+  providers: [
+    {
+      q: "How quickly can EvidentABA be deployed?",
+      a: "Most implementations go live within one week. We handle the technical integration with your EHR and billing system, train your team, and provide dedicated onboarding support throughout."
+    },
+    {
+      q: "Does this require new hardware or devices?",
+      a: "None. EvidentABA works on the therapist's existing smartphone — iOS or Android. No installation fees, no hardware costs, no special equipment."
+    },
+    {
+      q: "How does the AI document sessions?",
+      a: "Computer vision captures session data automatically during the visit. Behavioral AI evaluates protocol fidelity and engagement levels — all without interrupting the therapist or client."
+    },
+    {
+      q: "How does EvidentABA reduce claim denials?",
+      a: "Every session generates an audit-ready, timestamped verification record that flows directly to your billing system. This eliminates documentation gaps that cause denials and speeds up reimbursement approvals."
+    },
+    {
+      q: "Is patient data safe and HIPAA compliant?",
+      a: "Yes. All data is encrypted in transit and at rest. We execute a Business Associate Agreement (BAA) with every client and are fully HIPAA compliant from day one."
+    },
+    {
+      q: "How does EvidentABA integrate with our EHR?",
+      a: "We integrate with all major EHR and practice management platforms via standard APIs. Implementation typically takes under a week with no disruption to existing workflows."
+    }
+  ],
+  payers: [
+    {
+      q: "How does EvidentABA detect fraud and ghost sessions?",
+      a: "Computer vision confirms therapist and client presence in real time for every session. Sessions without confirmed presence are flagged automatically — eliminating ghost billing and time inflation at the source."
+    },
+    {
+      q: "What ROI can a state Medicaid program expect?",
+      a: "State programs typically see 166-240x ROI in year one, primarily from recovering 10-15% of ABA spend lost to fraud and improper billing. We provide a custom model based on your program size."
+    },
+    {
+      q: "How does EvidentABA integrate with state Medicaid systems?",
+      a: "We have dedicated integration pathways built specifically for state EVV, Medicaid Management Information Systems (MMIS), and MCO reporting requirements. Implementation is typically under two weeks."
+    },
+    {
+      q: "How is quality measured?",
+      a: "Our behavioral AI evaluates session quality against clinical best-practice benchmarks — scoring therapist engagement, intervention fidelity, and protocol adherence with 94% accuracy. Results feed directly into provider performance reports."
+    },
+    {
+      q: "How is patient privacy protected?",
+      a: "EvidentABA is fully HIPAA compliant. All data is encrypted end-to-end, processed under strict access controls, and covered by a Business Associate Agreement (BAA) on every contract."
+    },
+    {
+      q: "Can EvidentABA scale across a large provider network?",
+      a: "Yes. The platform is designed for statewide deployment across hundreds of providers simultaneously. Onboarding is self-serve for providers, with centralized reporting and analytics for payor administrators."
+    }
+  ]
+};
+
+function buildFAQ(audience) {
+  const faqs = faqData[audience] || faqData.providers;
+  const container = document.getElementById('faq-list');
+  if (!container) return;
+  openFaq = null;
+  container.innerHTML = faqs.map((item, i) => `
+    <div class="faq-item">
+      <button class="faq-btn" onclick="toggleFaq(${i})" id="faq-btn-${i}">
+        <span>${item.q}</span>
+        <svg class="faq-chevron" id="faq-chev-${i}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div class="faq-answer" id="faq-ans-${i}">
+        <div class="faq-answer-inner">${item.a}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+let openFaq = null;
+function toggleFaq(i) {
+  const ans  = document.getElementById(`faq-ans-${i}`);
+  const chev = document.getElementById(`faq-chev-${i}`);
+  if (openFaq !== null && openFaq !== i) {
+    document.getElementById(`faq-ans-${openFaq}`).classList.remove('open');
+    document.getElementById(`faq-chev-${openFaq}`).classList.remove('open');
+  }
+  const isOpen = ans.classList.contains('open');
+  ans.classList.toggle('open', !isOpen);
+  chev.classList.toggle('open', !isOpen);
+  openFaq = isOpen ? null : i;
+}
+  </script>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind config (must come AFTER CDN so tailwind global exists) -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'blue-deep':  '#0D2244',
+            navy:         '#1B3A6B',
+            'navy-mid':   '#2D5F9A',
+            sky:          '#29ABE2',
+            'sky-light':  '#7DCFE8',
+            'blue-ice':   '#EBF5FB',
+            'blue-pale':  '#F0F7FF',
+            cream:        '#F7F4EF',
+            'cream-dark': '#EEE9E1',
+            ink:          '#0D1B2A',
+          },
+          fontFamily: {
+            sans:  ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* ─── Reset / base ─── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { background: #ffffff; color: #0D1B2A; font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+
+    /* ─── Nav glass ─── */
+    .nav-glass {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid rgba(27, 58, 107, 0.08);
+    }
+    .nav-scrolled {
+      box-shadow: 0 2px 24px rgba(13, 34, 68, 0.10);
+    }
+
+    /* ─── Audience pill ─── */
+    .audience-pill {
+      background: rgba(27, 58, 107, 0.08);
+      border-radius: 999px;
+      padding: 4px;
+      display: inline-flex;
+      gap: 2px;
+    }
+    .audience-btn {
+      border-radius: 999px;
+      padding: 7px 22px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #1B3A6B;
+      border: none;
+      background: transparent;
+    }
+    .audience-btn.active {
+      background: #1B3A6B;
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(27, 58, 107, 0.28);
+    }
+
+    /* ─── Hero gradient background ─── */
+    .hero-bg {
+      background: linear-gradient(135deg, #0D2244 0%, #1B3A6B 45%, #2D5F9A 100%);
+    }
+    .hero-wave {
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      overflow: hidden;
+      line-height: 0;
+    }
+
+    /* ─── Animated floating orbs ─── */
+    @keyframes float-slow {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-18px) scale(1.03); }
+    }
+    @keyframes float-mid {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-12px) scale(1.02); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.7; }
+    }
+    .orb-1 { animation: float-slow 8s ease-in-out infinite; }
+    .orb-2 { animation: float-mid 6s ease-in-out infinite 1.5s; }
+    .orb-glow { animation: pulse-glow 4s ease-in-out infinite; }
+
+    /* ─── Hero SVG ring spin ─── */
+    @keyframes slow-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .ring-spin { animation: slow-spin 28s linear infinite; transform-origin: center; }
+    .ring-spin-reverse { animation: slow-spin 40s linear infinite reverse; transform-origin: center; }
+
+    /* ─── Scroll reveal ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.7s cubic-bezier(.16,1,.3,1), transform 0.7s cubic-bezier(.16,1,.3,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.22s; }
+    .reveal-delay-3 { transition-delay: 0.34s; }
+    .reveal-delay-4 { transition-delay: 0.46s; }
+
+    /* ─── Stat number ─── */
+    .stat-num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+
+    /* ─── Card hover lift ─── */
+    .lift {
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
+    }
+    .lift:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 24px 56px rgba(27, 58, 107, 0.13);
+    }
+
+    /* ─── Feature pillars (What You Get) ─── */
+    .pillar-card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 40px 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(27, 58, 107, 0.07);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .pillar-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #1B3A6B, #29ABE2);
+      border-radius: 24px 24px 0 0;
+    }
+    .pillar-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 28px 60px rgba(27, 58, 107, 0.15);
+    }
+    .pillar-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    /* ─── Feature rows ─── */
+    .feature-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 24px 0;
+      border-bottom: 1px solid #EBF5FB;
+    }
+    .feature-row:last-child { border-bottom: none; }
+    .feature-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #EBF5FB, #D0EBFA);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ─── Section wave dividers ─── */
+    .wave-top {
+      margin-top: -2px;
+    }
+    .wave-bottom {
+      margin-bottom: -2px;
+    }
+
+    /* ─── Stats band ─── */
+    .stat-card {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 20px;
+      padding: 28px 32px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    @media (max-width: 639px) {
+      .stat-card { padding: 16px 10px; border-radius: 14px; }
+      .stat-card .text-2xl { font-size: 1.125rem; }
+    }
+
+    /* ─── How It Works ─── */
+    .hiw-outer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .hiw-outer { grid-template-columns: 1fr; }
+    }
+    .hiw-left {
+      position: sticky;
+      top: 88px;
+      height: calc(100vh - 88px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 56px 0 0;
+    }
+    @media (max-width: 768px) {
+      .hiw-left { position: relative; top: auto; height: auto; padding: 0 0 40px 0; }
+    }
+    .hiw-step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+      opacity: 0.32;
+    }
+    .hiw-step-item.active { opacity: 1; }
+    .hiw-step-num {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid #C5D3E8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #8FA3C0;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+      background: transparent;
+    }
+    .hiw-step-item.active .hiw-step-num {
+      background: linear-gradient(135deg, #1B3A6B, #29ABE2);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(27, 58, 107, 0.35);
+    }
+    .hiw-step-label {
+      padding-top: 8px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: #8FA3C0;
+      transition: color 0.3s ease;
+      line-height: 1.4;
+    }
+    .hiw-step-item.active .hiw-step-label { color: #1B3A6B; }
+
+    .hiw-progress-line {
+      width: 2px;
+      background: #C5D3E8;
+      position: absolute;
+      left: 19px;
+      top: 40px;
+      bottom: 0;
+      border-radius: 2px;
+    }
+    .hiw-progress-fill {
+      width: 100%;
+      background: linear-gradient(180deg, #1B3A6B, #29ABE2);
+      border-radius: 2px;
+      transition: height 0.45s ease;
+    }
+    .hiw-step-panel {
+      min-height: 90vh;
+      display: flex;
+      align-items: center;
+      padding: 80px 0;
+    }
+    @media (max-width: 768px) {
+      .hiw-step-panel { min-height: auto; padding: 40px 0; }
+    }
+    .hiw-step-panel .hiw-content {
+      opacity: 0.16;
+      transition: opacity 0.55s cubic-bezier(.16,1,.3,1);
+    }
+    .hiw-step-panel.hiw-active .hiw-content { opacity: 1; }
+
+    /* ─── Comparison table ─── */
+    .cmp { width: 100%; border-collapse: collapse; }
+    .cmp th, .cmp td {
+      padding: 15px 18px;
+      font-size: 0.875rem;
+      text-align: center;
+      border-bottom: 1px solid #EBF5FB;
+    }
+    .cmp th:first-child, .cmp td:first-child { text-align: left; }
+    .cmp thead tr th { font-weight: 600; color: #6B7F99; background: #F8FBFF; }
+    .cmp thead tr th.ev { background: linear-gradient(135deg, #1B3A6B, #2D5F9A); color: #fff; }
+    .cmp tbody tr td.ev { background: #EBF5FB; }
+    .cmp tbody tr:last-child td { border-bottom: none; }
+    .cmp tbody tr:hover td { background: rgba(235,245,251,0.5); }
+    .cmp tbody tr:hover td.ev { background: #D8EEF9; }
+    .cmp-check { color: #16A34A; font-size: 1.05rem; font-weight: 700; }
+    .cmp-cross { color: #CBD5E1; font-size: 1rem; }
+    /* Wider table (7 col with logos) needs more room */
+    .cmp-wide { min-width: 780px; }
+
+    /* ─── Mobile scroll hint ─── */
+    .scroll-hint {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #8FA3C0;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 767px) {
+      .scroll-hint { display: flex; }
+    }
+
+    /* ─── Trust image mobile height ─── */
+    @media (max-width: 1023px) {
+      .trust-img-wrap img { height: 300px; }
+    }
+    @media (max-width: 639px) {
+      .trust-img-wrap img { height: 240px; }
+    }
+
+    /* ─── FAQ ─── */
+    .faq-item { border-bottom: 1px solid #D8EEF9; }
+    .faq-btn {
+      width: 100%; display: flex; justify-content: space-between; align-items: center;
+      padding: 22px 0; text-align: left; background: none; border: none; cursor: pointer;
+      font-size: 0.9375rem; font-weight: 500; color: #0D1B2A; transition: color 0.2s;
+    }
+    .faq-btn:hover { color: #1B3A6B; }
+    .faq-chevron { width: 20px; height: 20px; flex-shrink: 0; margin-left: 16px; transition: transform 0.3s ease; color: #8FA3C0; }
+    .faq-chevron.open { transform: rotate(180deg); }
+    .faq-answer { overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.52s cubic-bezier(.16,1,.3,1), opacity 0.4s ease; }
+    .faq-answer.open { max-height: 600px; opacity: 1; }
+    .faq-answer-inner { padding-bottom: 22px; color: #4A6380; font-size: 0.9rem; line-height: 1.8; transform: translateY(-8px); transition: transform 0.45s cubic-bezier(.16,1,.3,1); }
+    .faq-answer.open .faq-answer-inner { transform: translateY(0); }
+
+    /* ─── ROI slider ─── */
+    input[type=range] { -webkit-appearance: none; width: 100%; height: 5px; border-radius: 5px; background: #D0EBFA; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #1B3A6B, #29ABE2); cursor: pointer; box-shadow: 0 2px 10px rgba(27,58,107,0.35); border: 3px solid #fff; }
+
+    /* ─── Form inputs ─── */
+    .field { width: 100%; background: #fff; border: 1.5px solid #D0EBFA; border-radius: 12px; padding: 13px 16px; font-size: 0.9rem; font-family: 'Inter', sans-serif; color: #0D1B2A; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
+    .field:focus { border-color: #29ABE2; box-shadow: 0 0 0 3px rgba(41, 171, 226, 0.15); }
+    .field::placeholder { color: #A8C5D8; }
+
+    /* ─── Buttons ─── */
+    .btn-primary { background: linear-gradient(135deg, #1B3A6B, #2D5F9A); color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 30px; font-size: 0.9rem; transition: all 0.2s; cursor: pointer; border: none; display: inline-block; text-align: center; letter-spacing: 0.01em; box-shadow: 0 4px 16px rgba(27,58,107,0.28); }
+    .btn-primary:hover { background: linear-gradient(135deg, #142d55, #1B3A6B); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(27,58,107,0.35); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-sky { background: linear-gradient(135deg, #29ABE2, #7DCFE8); color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 30px; font-size: 0.9rem; transition: all 0.2s; cursor: pointer; border: none; display: inline-block; text-align: center; box-shadow: 0 4px 16px rgba(41,171,226,0.35); }
+    .btn-sky:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(41,171,226,0.45); }
+
+    .btn-white { background: #fff; color: #1B3A6B; font-weight: 700; border-radius: 12px; padding: 13px 30px; font-size: 0.9rem; transition: all 0.2s; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); display: inline-block; text-align: center; }
+    .btn-white:hover { background: rgba(255,255,255,0.92); transform: translateY(-1px); }
+
+    .btn-outline { background: transparent; color: #1B3A6B; font-weight: 600; border-radius: 12px; padding: 12px 28px; font-size: 0.9rem; transition: background 0.2s; cursor: pointer; border: 2px solid #1B3A6B; display: inline-block; text-align: center; }
+    .btn-outline:hover { background: rgba(27,58,107,0.05); }
+
+    /* ─── Section label ─── */
+    .section-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #29ABE2; }
+    .section-label-white { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+
+    /* ─── Trusted badge ─── */
+    .trust-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 999px; padding: 6px 16px 6px 10px; font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.85); backdrop-filter: blur(8px); }
+
+    /* ─── Hero image frame ─── */
+    .hero-image-frame { border-radius: 24px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.35); position: relative; }
+    .hero-image-badge { position: absolute; bottom: 20px; left: 20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); border-radius: 16px; padding: 12px 18px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+
+    /* ─── Divider ─── */
+    .divider { border: none; border-top: 1px solid #D0EBFA; }
+
+    /* ─── Floating image card ─── */
+    .img-float {
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 24px 72px rgba(13,34,68,0.22);
+      position: relative;
+      transition: transform 0.4s cubic-bezier(.16,1,.3,1), box-shadow 0.4s ease;
+    }
+    .img-float:hover {
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 40px 96px rgba(13,34,68,0.30);
+    }
+    .img-float img {
+      width: 100%; display: block; object-fit: cover;
+    }
+
+    /* ─── Floating accent badge on images ─── */
+    .img-badge {
+      position: absolute;
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(16px);
+      border-radius: 18px;
+      padding: 14px 20px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 8px 40px rgba(13,34,68,0.18);
+      border: 1px solid rgba(255,255,255,0.8);
+    }
+    .img-badge-tl { top: 16px; left: 16px; }
+    .img-badge-br { bottom: 16px; right: 16px; }
+    .img-badge-bl { bottom: 16px; left: 16px; }
+
+    /* ─── Sky accent line on sections ─── */
+    .sky-accent-line {
+      display: inline-block;
+      height: 3px;
+      width: 48px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #29ABE2, #7DCFE8);
+      margin-bottom: 20px;
+    }
+
+    /* ─── Section with bleed image ─── */
+    .bleed-img-section {
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ─── Angled divider ─── */
+    .angle-divider-bottom {
+      position: absolute;
+      bottom: -2px; left: 0; right: 0;
+      overflow: hidden; line-height: 0;
+    }
+    .angle-divider-top {
+      position: absolute;
+      top: -2px; left: 0; right: 0;
+      overflow: hidden; line-height: 0;
+      transform: rotate(180deg);
+    }
+
+    /* ─── HIW image panel ─── */
+    .hiw-img-wrap {
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 56px rgba(13,34,68,0.20);
+      margin-bottom: 32px;
+      position: relative;
+    }
+    .hiw-img-wrap img {
+      width: 100%; height: 220px; object-fit: cover; display: block;
+    }
+    @media (min-width: 640px) {
+      .hiw-img-wrap img { height: 280px; }
+    }
+
+    /* ─── Colored stat highlight ─── */
+    .sky-stat-box {
+      background: linear-gradient(135deg, #29ABE2, #7DCFE8);
+      border-radius: 16px;
+      padding: 20px 24px;
+      color: #fff;
+    }
+
+    /* ─── Problem visual ─── */
+    .problem-img-wrap {
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 32px 80px rgba(13,34,68,0.22);
+      margin-bottom: 48px;
+      position: relative;
+    }
+    .problem-img-wrap img {
+      width: 100%; height: 300px; object-fit: cover; display: block;
+    }
+    @media (min-width: 1024px) {
+      .problem-img-wrap img { height: 380px; }
+    }
+
+    /* ─── Trust image ─── */
+    .trust-img-wrap {
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 32px 80px rgba(13,34,68,0.22);
+      position: relative;
+    }
+    .trust-img-wrap img {
+      width: 100%; height: 420px; object-fit: cover; display: block;
+    }
+
+    /* ─── Number counter ─── */
+    .counter-animate {
+      transition: all 0.3s ease;
+    }
+
+    /* ─── Gradient text ─── */
+    .text-gradient {
+      background: linear-gradient(135deg, #1B3A6B, #29ABE2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .text-gradient-sky {
+      background: linear-gradient(135deg, #29ABE2, #7DCFE8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Sky pill badge ─── */
+    .sky-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(41,171,226,0.12);
+      border: 1px solid rgba(41,171,226,0.25);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 0.75rem; font-weight: 600;
+      color: #29ABE2;
+    }
+
+/* ─── Gradient background utilities ─── */
+.bg-gradient-navy   { background: linear-gradient(135deg, #1B3A6B, #29ABE2); }
+.bg-white-to-pale   { background: linear-gradient(180deg, #ffffff, #F0F7FF); }
+.bg-ice-gradient    { background: linear-gradient(135deg, #EBF5FB, #D0EBFA); }
+.bg-pale-gradient   { background: linear-gradient(135deg, #F0F7FF, #EBF5FB); }
+
+/* ─── Icon boxes ─── */
+.icon-box { display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: linear-gradient(135deg, #1B3A6B, #29ABE2); }
+.icon-box-44 { width: 44px; height: 44px; border-radius: 12px; }
+.icon-box-40 { width: 40px; height: 40px; border-radius: 12px; }
+.icon-box-36 { width: 36px; height: 36px; border-radius: 10px; }
+.icon-box-32 { width: 32px; height: 32px; border-radius: 8px; }
+.icon-box-green { background: #16A34A; }
+
+/* ─── Absolute badge position ─── */
+.abs-tl-12 { position: absolute; top: 12px; left: 12px; }
+
+/* ─── Sky border-top accent ─── */
+.border-sky-top-3 { border-top: 3px solid rgba(41, 171, 226, 0.5); }
+
+/* ─── Table row stripes ─── */
+.table-stripe-light { background: rgba(27,58,107,0.04); }
+.table-stripe-dark  { background: rgba(27,58,107,0.07); }
+
+/* ─── Section backgrounds ─── */
+.bg-section-pale { background: #F0F7FF; }
+.bg-sky-h-gradient { background: linear-gradient(90deg, #29ABE2, #7DCFE8); }
+
+/* ─── Image wrappers (specific) ─── */
+.showcase-wrap { border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(27,58,107,0.18); }
+.hero-img-min  { min-height: 420px; }
+.payer-problem-img { height: 320px; object-fit: cover; }
+
+/* ─── Decorative backdrop text ─── */
+.navy-band-backdrop { font-size: clamp(8rem,20vw,18rem); line-height: 1; white-space: nowrap; }
+
+/* ─── Img badge padding variants ─── */
+.img-badge-p1 { padding: 10px 16px; }
+.img-badge-p2 { padding: 10px 14px; border-radius: 12px; }
+
+/* ─── Section + CTA gradients ─── */
+.bg-deep-navy  { background: linear-gradient(135deg, #0D2244, #1B3A6B); }
+.bg-cta-grad   { background: linear-gradient(135deg, #0D2244, #1B3A6B, #2D5F9A); }
+.bg-footer     { background: #1E2D42; }
+.bg-pale-to-white  { background: linear-gradient(180deg, #F0F7FF 0%, #ffffff 100%); }
+.bg-ice-to-white   { background: linear-gradient(180deg, #EBF5FB 0%, #ffffff 100%); }
+
+/* ─── Final utility classes ─── */
+.bg-pale-to-ice   { background: linear-gradient(180deg, #F0F7FF 0%, #EBF5FB 100%); }
+.bg-stats-grad    { background: linear-gradient(135deg, #0D2244 0%, #1B3A6B 55%, #2D5F9A 100%); }
+.text-white-faded { color: rgba(255,255,255,0.7); }
+.wave-svg         { width: 100%; height: 80px; display: block; }
+.abs-bottom-row   { position: absolute; bottom: 20px; left: 20px; right: 20px; }
+.hiw-progress-pad { padding-left: 56px; }
+.glass-pill-light { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+  </style>
+</head>
+
+<body x-data="app()" x-init="init()">
+
+<!-- ════════════════════════════════════════════
+     NAVIGATION
+════════════════════════════════════════════ -->
+<header
+  id="nav"
+  class="fixed top-0 left-0 right-0 z-50 nav-glass transition-shadow duration-300"
+  :class="{ 'nav-scrolled': scrolled }"
+>
+  <div class="max-w-7xl mx-auto px-6 lg:px-10 h-20 flex items-center justify-between gap-6">
+
+    <!-- Logo -->
+    <a href="#" @click.prevent="goto('hero')" class="flex items-center gap-3 flex-shrink-0">
+      <img src="../assets/logo.png" alt="EvidentABA" class="h-9 w-auto"/>
+      <span class="font-bold text-navy text-base tracking-tight">EvidentABA</span>
+    </a>
+
+    <!-- Desktop links -->
+    <nav class="hidden md:flex items-center gap-1 text-sm font-medium text-navy/65">
+      <a href="#hiw"      @click.prevent="goto('hiw')"      class="px-3.5 py-2 rounded-xl hover:bg-blue-ice hover:text-navy transition-colors">How It Works</a>
+      <a href="#features" @click.prevent="goto('features')" class="px-3.5 py-2 rounded-xl hover:bg-blue-ice hover:text-navy transition-colors">Features</a>
+      <a href="#roi"      @click.prevent="goto('roi')"      class="px-3.5 py-2 rounded-xl hover:bg-blue-ice hover:text-navy transition-colors">ROI</a>
+      <a href="#faq"      @click.prevent="goto('faq')"      class="px-3.5 py-2 rounded-xl hover:bg-blue-ice hover:text-navy transition-colors">FAQ</a>
+    </nav>
+
+    <!-- Right CTAs -->
+    <div class="flex items-center gap-3">
+      <a href="#contact" @click.prevent="goto('contact')" class="hidden sm:block text-sm font-semibold text-navy/60 hover:text-navy transition-colors px-3 py-2">Contact</a>
+      <a href="#contact" @click.prevent="goto('contact')" class="btn-primary text-sm px-5 py-2.5">Book a Demo</a>
+      <!-- Hamburger -->
+      <button class="md:hidden p-2 rounded-xl hover:bg-blue-ice" @click="mobileOpen = !mobileOpen" aria-label="Menu">
+        <svg class="w-5 h-5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path x-show="!mobileOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          <path x-show="mobileOpen" x-cloak stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div x-show="mobileOpen" x-cloak class="md:hidden bg-white/97 backdrop-blur border-t border-blue-ice px-6 py-4 space-y-1 text-sm">
+    <a href="#hiw"      class="block px-3 py-3 font-medium text-navy/70 hover:text-navy rounded-xl hover:bg-blue-ice" @click="mobileOpen=false; goto('hiw')">How It Works</a>
+    <a href="#features" class="block px-3 py-3 font-medium text-navy/70 hover:text-navy rounded-xl hover:bg-blue-ice" @click="mobileOpen=false; goto('features')">Features</a>
+    <a href="#roi"      class="block px-3 py-3 font-medium text-navy/70 hover:text-navy rounded-xl hover:bg-blue-ice" @click="mobileOpen=false; goto('roi')">ROI</a>
+    <a href="#faq"      class="block px-3 py-3 font-medium text-navy/70 hover:text-navy rounded-xl hover:bg-blue-ice" @click="mobileOpen=false; goto('faq')">FAQ</a>
+    <a href="#contact"  class="block px-3 py-3 font-bold text-white bg-gradient-to-r from-navy to-navy-mid rounded-xl mt-2 text-center" @click="mobileOpen=false; goto('contact')">Book a Demo →</a>
+  </div>
+</header>
+
+
+<!-- ════════════════════════════════════════════
+     HERO — Full gradient, split layout
+════════════════════════════════════════════ -->
+<section id="hero" class="relative overflow-hidden pt-20 hero-bg min-h-screen flex items-center">
+
+  <!-- Background orbs -->
+  <div class="absolute top-0 right-0 w-[600px] h-[600px] rounded-full orb-glow pointer-events-none" style="background: radial-gradient(circle, rgba(41,171,226,0.18) 0%, transparent 65%); transform: translate(20%, -20%);"></div>
+  <div class="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full orb-glow pointer-events-none" style="background: radial-gradient(circle, rgba(45,95,154,0.25) 0%, transparent 70%); transform: translate(-20%, 20%); animation-delay: 2s;"></div>
+  <div class="absolute top-1/3 left-1/2 w-[300px] h-[300px] rounded-full pointer-events-none" style="background: radial-gradient(circle, rgba(41,171,226,0.08) 0%, transparent 70%);"></div>
+
+  <!-- Content -->
+  <div class="relative max-w-7xl mx-auto w-full px-6 lg:px-10 py-20 lg:py-28">
+    <div class="grid lg:grid-cols-2 gap-14 lg:gap-20 items-center">
+
+      <!-- LEFT — headline + CTA -->
+      <div class="reveal visible">
+
+        <!-- Audience toggle -->
+        <div class="audience-pill glass-pill-light mb-8 inline-flex">
+          <button class="audience-btn" :class="{active: audience==='providers'}" @click="setAudience('providers')"
+            style="color:rgba(255,255,255,0.7)"
+            :style="audience==='providers' ? 'color:#fff; background: rgba(255,255,255,0.18);' : ''">
+            For Providers
+          </button>
+          <button class="audience-btn" :class="{active: audience==='payers'}" @click="setAudience('payers')"
+            style="color:rgba(255,255,255,0.7)"
+            :style="audience==='payers' ? 'color:#fff; background: rgba(255,255,255,0.18);' : ''">
+            For Payors &amp; MCOs
+          </button>
+        </div>
+
+        <!-- Headline - Providers -->
+        <div x-show="audience === 'providers'">
+          <h1 class="font-serif text-[clamp(2.8rem,5.5vw,5rem)] font-bold text-white leading-[1.05] tracking-tight mb-6">
+            Focus on therapy.<br/>
+            <span class="text-gradient-sky">Not paperwork.</span>
+          </h1>
+          <p class="text-lg text-white/70 leading-relaxed mb-8 max-w-[500px]">
+            EvidentABA automatically documents and verifies every ABA session using AI — so your therapists spend 90% less time on admin and more time with the children who need them.
+          </p>
+        </div>
+
+        <!-- Headline - Payers -->
+        <div x-show="audience === 'payers'" x-cloak>
+          <h1 class="font-serif text-[clamp(2.8rem,5.5vw,5rem)] font-bold text-white leading-[1.05] tracking-tight mb-6">
+            Protect resources.<br/>
+            <span class="text-gradient-sky">Ensure quality.</span>
+          </h1>
+          <p class="text-lg text-white/70 leading-relaxed mb-8 max-w-[500px]">
+            AI-powered verification catches fraud before it's paid, confirms every visit, and benchmarks quality across your ABA network — saving up to $25M per year.
+          </p>
+        </div>
+
+        <!-- CTAs -->
+        <div class="flex flex-wrap gap-3 mb-12">
+          <a href="#contact" @click.prevent="goto('contact')" class="btn-sky">Book a Demo →</a>
+          <a href="#hiw"     @click.prevent="goto('hiw')"     class="btn-white">See How It Works</a>
+        </div>
+
+        <!-- Stats strip -->
+        <div x-show="audience === 'providers'">
+          <div class="grid grid-cols-3 gap-4">
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">90%</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">Less documentation</div>
+            </div>
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">+$15K</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">Revenue / therapist / yr</div>
+            </div>
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">&lt;1 wk</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">Time to deploy</div>
+            </div>
+          </div>
+        </div>
+        <div x-show="audience === 'payers'" x-cloak>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">$25M+</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">Saved per payor / yr</div>
+            </div>
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">100%</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">Sessions verified</div>
+            </div>
+            <div class="stat-card">
+              <div class="text-2xl font-bold text-white stat-num mb-1">240x</div>
+              <div class="text-xs text-white/55 font-medium leading-tight">ROI in year one</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT — hero image or mockup -->
+      <div class="reveal reveal-delay-2 hidden lg:block">
+        <div class="hero-image-frame orb-1">
+          <!-- Therapy image - generated by AI or fallback -->
+          <img
+            src="evidentaba-hero.png"
+            alt="ABA therapy session in progress"
+            class="w-full h-full object-cover hero-img-min"
+            onerror="this.parentElement.innerHTML=heroFallback()"
+          />
+          <!-- Floating quality badge -->
+          <div class="hero-image-badge">
+            <div class="icon-box icon-box-40">
+              <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <div class="text-[11px] font-semibold text-navy/50 uppercase tracking-wider">Quality Score</div>
+              <div class="text-sm font-bold text-navy">94 / 100 — Excellent</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Wave bottom -->
+  <div class="hero-wave">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 80" preserveAspectRatio="none" class="wave-svg">
+      <path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z" fill="#ffffff"/>
+    </svg>
+  </div>
+</section>
+
+
+
+<!-- ════════════════════════════════════════════
+     PROBLEM STATS — with contextual image
+════════════════════════════════════════════ -->
+<section class="py-20 px-6 lg:px-10 relative overflow-hidden bg-white-to-pale">
+  <!-- Decorative background circle -->
+  <div class="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(41,171,226,0.07),transparent 70%);transform:translate(30%,-50%);"></div>
+
+  <div class="max-w-7xl mx-auto relative z-10">
+
+    <!-- Providers version -->
+    <div x-show="audience === 'providers'">
+      <!-- Full-width contextual image -->
+      <div class="problem-img-wrap reveal">
+        <img
+          src="evidentaba-problem.png"
+          alt="ABA therapy session in progress"
+          onerror="this.parentElement.style.background='linear-gradient(135deg,#EBF5FB,#D0EBFA)'; this.parentElement.style.minHeight='300px'; this.style.display='none';"
+        />
+        <!-- Overlay gradient for text legibility -->
+        <div style="position:absolute;inset:0;background:linear-gradient(to right, rgba(13,34,68,0.5) 0%, transparent 60%);"></div>
+        <!-- Floating text overlay -->
+        <div style="position:absolute;top:50%;left:40px;transform:translateY(-50%);" class="hidden lg:block">
+          <div class="sky-pill mb-3"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg> The problem</div>
+          <h2 class="font-serif text-[clamp(1.8rem,2.5vw,2.5rem)] font-bold text-white leading-tight max-w-sm">ABA clinics are<br/>drowning in paperwork.</h2>
+        </div>
+      </div>
+
+      <!-- Headline (mobile / when no image) -->
+      <div class="text-center mb-12 reveal lg:hidden">
+        <div class="sky-accent-line mx-auto"></div>
+        <p class="section-label mb-3">The problem</p>
+        <h2 class="font-serif text-[clamp(1.8rem,3vw,2.75rem)] font-bold text-navy leading-tight">ABA clinics are drowning in paperwork.</h2>
+        <p class="text-navy/55 mt-3 max-w-xl mx-auto">Manual documentation is killing clinician time, triggering claim denials, and leaving quality invisible to everyone.</p>
+      </div>
+
+      <!-- Hidden on desktop (already in image overlay) -->
+      <div class="hidden lg:block text-center mb-12 reveal">
+        <p class="text-navy/55 max-w-xl mx-auto">Manual documentation is killing clinician time, triggering claim denials, and leaving quality invisible to everyone.</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 reveal">
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice bg-white-to-pale" >
+          <div class="sky-stat-box inline-block mb-4 px-5 py-2 rounded-2xl text-2xl font-bold stat-num">3 hrs</div>
+          <div class="font-semibold text-navy mb-2">Daily Documentation</div>
+          <p class="text-sm text-navy/50 leading-relaxed">The average ABA therapist spends 3+ hours per day on session notes, billing, and compliance records.</p>
+        </div>
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice reveal reveal-delay-1 bg-white-to-pale" >
+          <div class="mb-4 text-4xl font-bold stat-num text-gradient" >30%</div>
+          <div class="font-semibold text-navy mb-2">Claims Denied or Delayed</div>
+          <p class="text-sm text-navy/50 leading-relaxed">Manual errors lead to missing records and delayed reimbursements that cost clinics thousands per year.</p>
+        </div>
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice reveal reveal-delay-2 bg-white-to-pale" >
+          <div class="mb-4 text-4xl font-bold stat-num text-gradient" >0</div>
+          <div class="font-semibold text-navy mb-2">Objective Quality Data</div>
+          <p class="text-sm text-navy/50 leading-relaxed">Without objective metrics, great therapists go unrecognized. Quality is invisible to payors and families.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payers version -->
+    <div x-show="audience === 'payers'" x-cloak>
+      <div class="grid lg:grid-cols-2 gap-14 items-center mb-14 reveal">
+        <!-- Left: text -->
+        <div>
+          <div class="sky-accent-line"></div>
+          <p class="section-label mb-3">The problem</p>
+          <h2 class="font-serif text-[clamp(1.8rem,3vw,2.75rem)] font-bold text-navy leading-tight mb-4">Billions in ABA spend.<br/>Billions unverified.</h2>
+          <p class="text-navy/55 leading-relaxed max-w-md">ABA is the fastest-growing Medicaid category — and the one with the least visibility into what's actually being delivered.</p>
+        </div>
+        <!-- Right: image -->
+        <div class="img-float">
+          <img
+            src="evidentaba-problem.png"
+            alt="ABA fraud and oversight challenge visualization"
+            class="payer-problem-img"
+            onerror="this.parentElement.style.background='linear-gradient(135deg,#0D2244,#1B3A6B)'; this.parentElement.style.minHeight='320px'; this.style.display='none';"
+          />
+          <!-- Floating stat badge -->
+          <div class="img-badge img-badge-bl">
+            <div class="icon-box icon-box-36">
+              <svg width="18" height="18" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-navy">$1.2B+ Annually</div>
+              <div class="text-[10px] text-navy/50">Improper ABA spending</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 reveal">
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice bg-white-to-pale" >
+          <div class="sky-stat-box inline-block mb-4 px-5 py-2 rounded-2xl text-2xl font-bold stat-num">$6.5B</div>
+          <div class="font-semibold text-navy mb-2">Annual ABA Spend</div>
+          <p class="text-sm text-navy/50 leading-relaxed">$656M growth 2020–2024. Fastest-growing behavioral health segment in the US.</p>
+        </div>
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice reveal reveal-delay-1 bg-white-to-pale" >
+          <div class="mb-4 text-4xl font-bold stat-num text-gradient" >$1.2B+</div>
+          <div class="font-semibold text-navy mb-2">Annual Improper Spending</div>
+          <p class="text-sm text-navy/50 leading-relaxed">10–15% of ABA budgets lost to fraud, ghost sessions, and billing errors — largely undetected.</p>
+        </div>
+        <div class="rounded-2xl p-8 text-center lift border border-blue-ice reveal reveal-delay-2 bg-white-to-pale" >
+          <div class="mb-4 text-4xl font-bold stat-num text-gradient" >30–40%</div>
+          <div class="font-semibold text-navy mb-2">Sessions Unverified</div>
+          <p class="text-sm text-navy/50 leading-relaxed">No proof of delivery or quality. Payors pay blindly on paper records with no real-time oversight.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     WHAT YOU GET — Redesigned pillars
+════════════════════════════════════════════ -->
+<section id="features" class="py-24 px-6 lg:px-10 bg-ice-to-white">
+  <div class="max-w-7xl mx-auto">
+
+    <div class="text-center mb-16 reveal">
+      <div class="sky-accent-line mx-auto"></div>
+      <p class="section-label mb-3">What you get</p>
+      <div x-show="audience === 'providers'">
+        <h2 class="font-serif text-[clamp(2rem,3.5vw,3rem)] font-bold text-navy leading-tight">
+          Built for providers who care.
+        </h2>
+        <p class="text-navy/55 mt-4 max-w-lg mx-auto leading-relaxed">Spend your time with patients. Let AI handle the rest.</p>
+      </div>
+      <div x-show="audience === 'payers'" x-cloak>
+        <h2 class="font-serif text-[clamp(2rem,3.5vw,3rem)] font-bold text-navy leading-tight">
+          Measurable impact on your bottom line.
+        </h2>
+        <p class="text-navy/55 mt-4 max-w-lg mx-auto leading-relaxed">Data-driven oversight that turns compliance into a value driver.</p>
+      </div>
+    </div>
+
+    <!-- ── PROVIDERS: 3 core pillars ── -->
+    <div x-show="audience === 'providers'">
+      <div class="grid md:grid-cols-3 gap-6 reveal">
+
+        <!-- Pillar 1 -->
+        <div class="pillar-card">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >90%</div>
+          <h3 class="text-xl font-bold text-navy mb-3">Less Documentation Time</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">Our AI captures session notes and EVV data automatically as therapy happens — giving back 3+ hours per therapist, per day.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Automated session notes</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">One-click EVV compliance</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Reduce clinician burnout</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar 2 -->
+        <div class="pillar-card reveal reveal-delay-1">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >$15K+</div>
+          <h3 class="text-xl font-bold text-navy mb-3">More Revenue Per Therapist</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">Quality scores unlock value-based care contracts with higher reimbursement rates, faster approvals, and fewer denials.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Faster claim processing</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Higher reimbursement rates</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Fewer denials and audits</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar 3 -->
+        <div class="pillar-card reveal reveal-delay-2">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >94%</div>
+          <h3 class="text-xl font-bold text-navy mb-3">Quality Recognition</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">Objective AI scoring developed by experienced BCBAs puts data behind your excellence — earning preferred status and performance bonuses.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Evidence-based scoring</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Preferred provider status</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Performance-based bonuses</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Provider feature showcase: 2-col image + feature list -->
+      <div class="mt-20 reveal">
+        <div class="grid lg:grid-cols-2 gap-14 items-center">
+          <!-- Dashboard image -->
+          <div>
+            <div class="showcase-wrap">
+              <img
+                src="evidentaba-dashboard.png"
+                alt="EvidentABA session dashboard"
+                class="w-full object-cover"
+                onerror="this.src=''; this.parentElement.style.background='linear-gradient(135deg,#EBF5FB,#D0EBFA)'; this.parentElement.style.minHeight='360px';"
+              />
+            </div>
+          </div>
+          <!-- Feature list -->
+          <div>
+            <p class="section-label mb-3">Automated documentation</p>
+            <h3 class="font-serif text-[clamp(1.75rem,2.8vw,2.5rem)] font-bold text-navy mb-4 leading-tight">Documentation<br/>made effortless.</h3>
+            <p class="text-navy/55 text-sm leading-relaxed mb-8">Transform hours of daily paperwork into seconds with intelligent session capture — without disrupting care.</p>
+            <div>
+              <div class="feature-row">
+                <div class="feature-icon-wrap">
+                  <svg width="22" height="22" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.882V15.12a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                </div>
+                <div>
+                  <div class="font-semibold text-navy mb-1">Real-Time Session Capture</div>
+                  <div class="text-sm text-navy/50 leading-relaxed">Records session details, interventions, and client responses automatically as therapy happens.</div>
+                </div>
+              </div>
+              <div class="feature-row">
+                <div class="feature-icon-wrap">
+                  <svg width="22" height="22" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                </div>
+                <div>
+                  <div class="font-semibold text-navy mb-1">Intelligent Note Generation</div>
+                  <div class="text-sm text-navy/50 leading-relaxed">AI creates detailed, professional session notes capturing clinical insights and progress.</div>
+                </div>
+              </div>
+              <div class="feature-row">
+                <div class="feature-icon-wrap">
+                  <svg width="22" height="22" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div>
+                  <div class="font-semibold text-navy mb-1">One-Click Compliance</div>
+                  <div class="text-sm text-navy/50 leading-relaxed">Automatically includes all required EVV data, billing codes, and compliance checkpoints.</div>
+                </div>
+              </div>
+              <div class="feature-row">
+                <div class="feature-icon-wrap">
+                  <svg width="22" height="22" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                </div>
+                <div>
+                  <div class="font-semibold text-navy mb-1">Fully Editable</div>
+                  <div class="text-sm text-navy/50 leading-relaxed">Review and customize any auto-generated content to match your clinical style.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAYERS: 3 core pillars ── -->
+    <div x-show="audience === 'payers'" x-cloak>
+      <div class="grid md:grid-cols-3 gap-6 reveal">
+
+        <!-- Pillar 1 -->
+        <div class="pillar-card">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >$25M</div>
+          <h3 class="text-xl font-bold text-navy mb-3">Average Annual Savings</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">Fraud prevention and quality oversight deliver immediate ROI through reduced fraudulent claims and improved network efficiency.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">10–15% fraud rate eliminated</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Faster identification of bad actors</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Proactive risk mitigation</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar 2 -->
+        <div class="pillar-card reveal reveal-delay-1">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >100%</div>
+          <h3 class="text-xl font-bold text-navy mb-3">Visit Verification Coverage</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">Every session automatically verified with EVV data and quality metrics — complete audit readiness and regulatory compliance.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">CMS EVV compliance built-in</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Audit-ready documentation</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Real-time compliance monitoring</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar 3 -->
+        <div class="pillar-card reveal reveal-delay-2">
+          <div class="pillar-icon bg-ice-gradient" >
+            <svg width="28" height="28" fill="none" stroke="#1B3A6B" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          </div>
+          <div class="text-4xl font-bold stat-num mb-2 text-gradient" >94%</div>
+          <h3 class="text-xl font-bold text-navy mb-3">Quality Score Accuracy</h3>
+          <p class="text-navy/55 text-sm leading-relaxed mb-6">AI models developed by BCBAs provide objective quality assessment enabling value-based contracts and network quality improvement.</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Identify high-performing providers</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Support quality improvement</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-navy" >
+                <svg width="12" height="12" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <span class="text-sm text-navy/65 font-medium">Enable value-based contracts</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payers: Fraud + Overview -->
+      <div class="mt-16 reveal">
+        <div class="grid md:grid-cols-2 gap-6">
+
+          <!-- Fraud schemes (simplified) -->
+          <div class="bg-white rounded-2xl p-8 border border-red-100 shadow-sm">
+            <div class="flex items-center gap-3 mb-6">
+              <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" fill="none" stroke="#DC2626" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              </div>
+              <h4 class="font-bold text-navy text-lg">Common Fraud Schemes</h4>
+            </div>
+            <div class="space-y-4">
+              <div class="flex items-start gap-3">
+                <div class="w-2 h-2 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                <div><strong class="text-navy text-sm">Ghost Billing</strong><p class="text-xs text-navy/50 mt-0.5">Services billed but never provided</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-2 h-2 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                <div><strong class="text-navy text-sm">Upcoding</strong><p class="text-xs text-navy/50 mt-0.5">Billing for higher-level services than delivered</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-2 h-2 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                <div><strong class="text-navy text-sm">Unlicensed Providers</strong><p class="text-xs text-navy/50 mt-0.5">Unqualified staff delivering services</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-2 h-2 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                <div><strong class="text-navy text-sm">Location Fraud</strong><p class="text-xs text-navy/50 mt-0.5">Services claimed at incorrect locations</p></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- How we stop it -->
+          <div class="rounded-2xl p-8 text-white bg-deep-navy">
+            <div class="flex items-center gap-3 mb-6">
+              <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" fill="none" stroke="#7DCFE8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              </div>
+              <h4 class="font-bold text-white text-lg">How EvidentABA Stops It</h4>
+            </div>
+            <div class="space-y-4">
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-sky-light flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <div><strong class="text-white text-sm">Real-Time Verification</strong><p class="text-xs text-white/50 mt-0.5">Every session recorded and verified instantly</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-sky-light flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <div><strong class="text-white text-sm">AI Pattern Detection</strong><p class="text-xs text-white/50 mt-0.5">Identifies suspicious billing patterns automatically</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-sky-light flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <div><strong class="text-white text-sm">Quality Validation</strong><p class="text-xs text-white/50 mt-0.5">Ensures services meet clinical standards</p></div>
+              </div>
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-sky-light flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <div><strong class="text-white text-sm">Complete Audit Trail</strong><p class="text-xs text-white/50 mt-0.5">Documentation for every claim submitted</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     ABA GROWTH STATS — navy band (Providers)
+════════════════════════════════════════════ -->
+<section class="py-20 px-6 lg:px-10 relative overflow-hidden bg-stats-grad" x-show="audience === 'providers'" x-cloak>
+  <!-- Decorative large text backdrop -->
+  <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden" aria-hidden="true">
+    <span class="font-serif font-bold text-white/[0.03] navy-band-backdrop" >ABA</span>
+  </div>
+  <!-- Floating orbs -->
+  <div class="absolute top-0 right-0 w-[400px] h-[400px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(41,171,226,0.14),transparent 65%);transform:translate(20%,-20%);"></div>
+  <div class="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(45,95,154,0.3),transparent 70%);transform:translate(-20%,20%);"></div>
+
+  <div class="max-w-7xl mx-auto relative z-10">
+    <div class="text-center mb-12 reveal">
+      <div class="inline-block w-12 h-[3px] rounded-full mb-4 bg-sky-h-gradient" ></div>
+      <p class="section-label-white mb-3">Industry context</p>
+      <h2 class="font-serif text-[clamp(1.75rem,3vw,2.75rem)] font-bold text-white leading-tight">
+        The autism therapy system is growing<br/>faster than accountability.
+      </h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6 reveal">
+      <div class="stat-card border-sky-top-3" >
+        <div class="text-5xl font-bold text-white stat-num mb-3">12x</div>
+        <div class="font-semibold text-white mb-2">Medicaid Growth</div>
+        <div class="text-sm text-white/45">$56M → $656M (2020–2024)</div>
+      </div>
+      <div class="stat-card reveal reveal-delay-1 border-sky-top-3" >
+        <div class="text-5xl font-bold text-white stat-num mb-3">$1.2B+</div>
+        <div class="font-semibold text-white mb-2">Annual Improper Spending</div>
+        <div class="text-sm text-white/45">10–15% of ABA therapy budgets</div>
+      </div>
+      <div class="stat-card reveal reveal-delay-2 border-sky-top-3" >
+        <div class="text-5xl font-bold text-white stat-num mb-3">30–40%</div>
+        <div class="font-semibold text-white mb-2">Sessions Unverified</div>
+        <div class="text-sm text-white/45">No proof of delivery or quality</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     HOW IT WORKS — sticky scroll
+════════════════════════════════════════════ -->
+<section id="hiw" class="px-6 lg:px-10 py-10 lg:py-0 bg-section-pale" >
+  <div class="max-w-7xl mx-auto">
+    <div class="hiw-outer gap-12 lg:gap-20">
+
+      <!-- LEFT sticky -->
+      <div class="hiw-left">
+        <div class="sky-accent-line"></div>
+        <p class="section-label mb-3">How it works</p>
+        <div x-show="audience === 'providers'">
+          <h2 class="font-serif text-[clamp(1.75rem,2.8vw,2.5rem)] font-bold text-navy leading-tight mb-8">
+            Three steps.<br/>No hardware.<br/>Live in under a week.
+          </h2>
+        </div>
+        <div x-show="audience === 'payers'" x-cloak>
+          <h2 class="font-serif text-[clamp(1.75rem,2.8vw,2.5rem)] font-bold text-navy leading-tight mb-8">
+            From session start to<br/>actionable insights<br/>in minutes.
+          </h2>
+        </div>
+
+        <div class="relative hiw-progress-pad">
+          <div class="hiw-progress-line" id="hiw-line">
+            <div class="hiw-progress-fill" id="hiw-fill" style="height: 0%;"></div>
+          </div>
+          <div class="hiw-step-item" :class="{active: hiwStep >= 1}" id="hiw-ind-1">
+            <div class="hiw-step-num">1</div>
+            <div class="hiw-step-label" x-show="audience === 'providers'">Open the app &amp; select patient</div>
+            <div class="hiw-step-label" x-show="audience === 'payers'" x-cloak>Provider starts a session</div>
+          </div>
+          <div class="hiw-step-item mt-10" :class="{active: hiwStep >= 2}" id="hiw-ind-2">
+            <div class="hiw-step-num">2</div>
+            <div class="hiw-step-label" x-show="audience === 'providers'">AI verifies session in real time</div>
+            <div class="hiw-step-label" x-show="audience === 'payers'" x-cloak>Secure recording &amp; automated upload</div>
+          </div>
+          <div class="hiw-step-item mt-10" :class="{active: hiwStep >= 3}" id="hiw-ind-3">
+            <div class="hiw-step-num">3</div>
+            <div class="hiw-step-label" x-show="audience === 'providers'">Quality scores &amp; reports delivered</div>
+            <div class="hiw-step-label" x-show="audience === 'payers'" x-cloak>AI analysis &amp; actionable reports</div>
+          </div>
+        </div>
+
+        <a href="#contact" @click.prevent="goto('contact')" class="btn-primary mt-14 hidden md:inline-block">Book a Demo</a>
+      </div>
+
+      <!-- RIGHT panels -->
+      <div id="hiw-right">
+
+        <div class="hiw-step-panel hiw-active" data-step="1">
+          <div class="hiw-content">
+            <!-- Step image -->
+            <div class="hiw-img-wrap">
+              <img
+                src="evidentaba-mobile-step1.png"
+                alt="Therapist opening the EvidentABA app on their smartphone"
+                onerror="this.parentElement.style.background='linear-gradient(135deg,#EBF5FB,#D0EBFA)'; this.style.display='none';"
+              />
+              <div class="sky-pill abs-tl-12" >
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/></svg>
+                Step 1 of 3
+              </div>
+            </div>
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-7 shadow-lg bg-gradient-navy" >
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            </div>
+            <h3 class="font-serif text-[clamp(1.75rem,2.5vw,2.25rem)] font-bold text-navy mb-5">Therapist opens the app</h3>
+            <p class="text-[1.0625rem] text-navy/60 leading-relaxed mb-7 max-w-md">At the start of each session, the therapist simply launches EvidentABA on their existing smartphone. No special device, no setup, no training needed.</p>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div>
+                  <div class="text-sm font-semibold text-navy">Works on any smartphone</div>
+                  <div class="text-sm text-navy/50 mt-0.5">iOS and Android. No hardware purchase required.</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div>
+                  <div class="text-sm font-semibold text-navy">Under 30 seconds to start</div>
+                  <div class="text-sm text-navy/50 mt-0.5">Adds nothing meaningful to the therapist's routine.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hiw-step-panel" data-step="2">
+          <div class="hiw-content">
+            <!-- Step image -->
+            <div class="hiw-img-wrap">
+              <img
+                src="evidentaba-ai-step2.png"
+                alt="AI computer vision analyzing an ABA therapy session in real time"
+                onerror="this.parentElement.style.background='linear-gradient(135deg,#0D2244,#29ABE2)'; this.style.display='none';"
+              />
+              <div class="sky-pill abs-tl-12" >
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/></svg>
+                Step 2 of 3
+              </div>
+              <!-- AI confidence badge -->
+              <div class="img-badge img-badge-br img-badge-p1" >
+                <div class="icon-box icon-box-32">
+                  <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-navy">94% Accuracy</div>
+                  <div class="text-[10px] text-navy/50">AI quality scoring</div>
+                </div>
+              </div>
+            </div>
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-7 shadow-lg bg-gradient-navy" >
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </div>
+            <h3 class="font-serif text-[clamp(1.75rem,2.5vw,2.25rem)] font-bold text-navy mb-5">AI verifies in real time</h3>
+            <p class="text-[1.0625rem] text-navy/60 leading-relaxed mb-7 max-w-md">Our computer vision confirms both therapist and client presence throughout the session. Behavioral AI evaluates quality, engagement, and protocol fidelity — automatically, without interrupting care.</p>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div><div class="text-sm font-semibold text-navy">Computer vision presence check</div><div class="text-sm text-navy/50 mt-0.5">Confirms therapist and client are present and engaged.</div></div>
+              </div>
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div><div class="text-sm font-semibold text-navy">Behavioral quality scoring</div><div class="text-sm text-navy/50 mt-0.5">94% accuracy, evaluated against clinical best-practice benchmarks.</div></div>
+              </div>
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div><div class="text-sm font-semibold text-navy">HIPAA-compliant, always</div><div class="text-sm text-navy/50 mt-0.5">All processing is encrypted. BAA provided to every client.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hiw-step-panel" data-step="3">
+          <div class="hiw-content">
+            <!-- Step image -->
+            <div class="hiw-img-wrap">
+              <img
+                src="evidentaba-reports-step3.png"
+                alt="EvidentABA auto-generated session reports and analytics dashboard"
+                onerror="this.parentElement.style.background='linear-gradient(135deg,#EBF5FB,#D0EBFA)'; this.style.display='none';"
+              />
+              <div class="sky-pill abs-tl-12" >
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/></svg>
+                Step 3 of 3
+              </div>
+              <!-- Report ready badge -->
+              <div class="img-badge img-badge-br img-badge-p1" >
+                <div class="icon-box icon-box-32 icon-box-green">
+                  <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-navy">Report Ready</div>
+                  <div class="text-[10px] text-navy/50">Delivered in &lt; 3 min</div>
+                </div>
+              </div>
+            </div>
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-7 shadow-lg bg-gradient-navy" >
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <h3 class="font-serif text-[clamp(1.75rem,2.5vw,2.25rem)] font-bold text-navy mb-5">Reports generated automatically</h3>
+            <p class="text-[1.0625rem] text-navy/60 leading-relaxed mb-7 max-w-md">Audit-ready session reports are created instantly and flow directly to your EHR, billing system, and payor. Everyone gets what they need without any manual steps.</p>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div><div class="text-sm font-semibold text-navy">Direct EHR &amp; billing integration</div><div class="text-sm text-navy/50 mt-0.5">Compatible with all major systems via standard APIs.</div></div>
+              </div>
+              <div class="flex items-start gap-4 bg-white rounded-2xl p-5 shadow-sm border border-blue-ice">
+                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-gradient-navy" ></div>
+                <div><div class="text-sm font-semibold text-navy">Instant audit-ready records</div><div class="text-sm text-navy/50 mt-0.5">No manual cleanup. Every session documented and signed off.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     ROI CALCULATOR
+════════════════════════════════════════════ -->
+<section id="roi" class="py-24 px-6 lg:px-10 bg-white">
+  <div class="max-w-7xl mx-auto">
+    <div class="grid md:grid-cols-2 gap-16 items-center">
+      <div class="reveal">
+        <div class="sky-accent-line"></div>
+        <p class="section-label mb-4">Run the numbers</p>
+        <h2 class="font-serif text-[clamp(2rem,3.5vw,3rem)] font-bold text-navy leading-tight mb-5">
+          See your ROI<br/>before you commit.
+        </h2>
+        <p class="text-navy/55 leading-relaxed max-w-sm">Conservative estimates based on real program data. We'll build you a custom model if you share your numbers.</p>
+        <a href="#contact" @click.prevent="goto('contact')" class="btn-primary mt-8 inline-block">Get a Custom Analysis</a>
+      </div>
+
+      <div class="reveal reveal-delay-1" x-data="roiCalc()">
+        <div class="rounded-2xl p-8 border border-blue-ice shadow-sm bg-pale-gradient" >
+          <div class="audience-pill mb-7">
+            <button class="audience-btn" :class="{active: type==='provider'}" @click="type='provider'">Provider</button>
+            <button class="audience-btn" :class="{active: type==='payer'}" @click="type='payer'">Payor / MCO</button>
+          </div>
+
+          <div x-show="type === 'provider'" class="space-y-6">
+            <div>
+              <div class="flex justify-between mb-2">
+                <label class="text-sm font-semibold text-navy">Number of Therapists</label>
+                <span class="text-sm font-bold text-navy" x-text="therapists"></span>
+              </div>
+              <input type="range" min="1" max="100" x-model.number="therapists"/>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4 pt-2">
+              <div class="bg-white rounded-xl p-4 sm:p-5 border border-blue-ice shadow-sm">
+                <div class="text-xl sm:text-2xl font-bold text-navy stat-num" x-text="'$' + (therapists * 15000).toLocaleString()"></div>
+                <div class="text-xs text-navy/50 mt-1">Added revenue / year</div>
+              </div>
+              <div class="bg-white rounded-xl p-4 sm:p-5 border border-blue-ice shadow-sm">
+                <div class="text-xl sm:text-2xl font-bold text-navy stat-num" x-text="Math.round(therapists * 10.5) + ' hrs'"></div>
+                <div class="text-xs text-navy/50 mt-1">Saved per week</div>
+              </div>
+            </div>
+          </div>
+
+          <div x-show="type === 'payer'" x-cloak class="space-y-6">
+            <div>
+              <div class="flex justify-between mb-2">
+                <label class="text-sm font-semibold text-navy">Annual ABA Spend</label>
+                <span class="text-sm font-bold text-navy" x-text="'$' + abaSpend + 'M'"></span>
+              </div>
+              <input type="range" min="10" max="500" step="10" x-model.number="abaSpend"/>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4 pt-2">
+              <div class="bg-white rounded-xl p-4 sm:p-5 border border-blue-ice shadow-sm">
+                <div class="text-xl sm:text-2xl font-bold text-navy stat-num" x-text="'$' + (abaSpend * 0.125).toFixed(1) + 'M'"></div>
+                <div class="text-xs text-navy/50 mt-1">Fraud recovered / yr</div>
+              </div>
+              <div class="bg-white rounded-xl p-4 sm:p-5 border border-blue-ice shadow-sm">
+                <div class="text-xl sm:text-2xl font-bold text-navy stat-num" x-text="Math.round(abaSpend * 0.125 / (abaSpend * 0.004)) + 'x'"></div>
+                <div class="text-xs text-navy/50 mt-1">Estimated ROI</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     COMPARISON TABLE — Payors only
+════════════════════════════════════════════ -->
+<section class="py-24 px-6 lg:px-10 bg-section-pale"  x-show="audience === 'payers'" x-cloak>
+  <div class="max-w-7xl mx-auto">
+
+    <div class="mb-14 reveal">
+      <div class="sky-accent-line"></div>
+      <p class="section-label mb-4">Why EvidentABA</p>
+      <h2 class="font-serif text-[clamp(2rem,3.5vw,3rem)] font-bold text-navy leading-tight max-w-xl">
+        Why Evident Stands Apart?
+      </h2>
+      <p class="text-navy/55 mt-4 max-w-2xl leading-relaxed">Unlike basic EVV systems, EvidentABA provides comprehensive fraud prevention and quality oversight designed specifically for autism therapy.</p>
+    </div>
+
+    <div class="scroll-hint mb-1">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      Scroll to compare
+    </div>
+    <div class="overflow-x-auto rounded-2xl border border-blue-ice shadow-sm reveal">
+      <table class="cmp cmp-wide">
+        <thead>
+          <tr>
+            <th class="text-left font-semibold text-navy/60 text-sm">Feature</th>
+            <th class="text-center bg-gray-50 text-xs font-semibold text-navy/50 py-4 px-4">
+              <img src="https://evidentaba.com/assets/ankota_logo_1761946868083-CQDjafA5.jpg" alt="Ankota" class="h-6 w-auto mx-auto object-contain grayscale opacity-60"/>
+              <div class="mt-1 text-[10px] text-navy/40">Ankota</div>
+              <div class="text-[9px] text-navy/30">Home care EVV</div>
+            </th>
+            <th class="text-center bg-gray-50 text-xs font-semibold text-navy/50 py-4 px-4">
+              <img src="https://evidentaba.com/assets/therap_logo_1761946876585-DK0ngTa6.png" alt="Therap" class="h-6 w-auto mx-auto object-contain grayscale opacity-60"/>
+              <div class="mt-1 text-[10px] text-navy/40">Therap</div>
+              <div class="text-[9px] text-navy/30">IDD services</div>
+            </th>
+            <th class="text-center bg-gray-50 text-xs font-semibold text-navy/50 py-4 px-4">
+              <img src="https://evidentaba.com/assets/hhaexchange_logo_1761946868084-C-c5Xvq2.jpg" alt="HHAeXchange" class="h-6 w-auto mx-auto object-contain grayscale opacity-60"/>
+              <div class="mt-1 text-[10px] text-navy/40">HHAeXchange</div>
+              <div class="text-[9px] text-navy/30">Homecare platform</div>
+            </th>
+            <th class="text-center bg-gray-50 text-xs font-semibold text-navy/50 py-4 px-4">
+              <img src="https://evidentaba.com/assets/wellsky_logo_1761946876588-AP8XJyM4.png" alt="WellSky" class="h-6 w-auto mx-auto object-contain grayscale opacity-60"/>
+              <div class="mt-1 text-[10px] text-navy/40">WellSky</div>
+              <div class="text-[9px] text-navy/30">Health IT suite</div>
+            </th>
+            <th class="text-center bg-gray-50 text-xs font-semibold text-navy/50 py-4 px-4">
+              <img src="https://evidentaba.com/assets/allgeo_logo_1761946868068-mHxSl2IH.webp" alt="AllGeo" class="h-6 w-auto mx-auto object-contain grayscale opacity-60"/>
+              <div class="mt-1 text-[10px] text-navy/40">AllGeo</div>
+              <div class="text-[9px] text-navy/30">Workforce tracking</div>
+            </th>
+            <th class="ev text-center py-4 px-4">
+              <img src="../assets/logo.png" alt="EvidentABA" class="h-7 w-auto mx-auto object-contain brightness-0 invert"/>
+              <div class="mt-1 text-[10px] text-white/80">EvidentABA</div>
+              <div class="text-[9px] text-white/50">ABA therapy oversight</div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="7" class="px-5 py-2.5 text-xs font-bold text-navy/50 uppercase tracking-widest text-left table-stripe-light">Basic Tracking</td></tr>
+          <tr>
+            <td class="font-medium text-ink">Type of Service</td>
+            <td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Date of Service</td>
+            <td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Duration</td>
+            <td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Location</td>
+            <td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-check">✓</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr><td colspan="7" class="px-5 py-2.5 text-xs font-bold text-navy uppercase tracking-widest text-left table-stripe-dark">Advanced Capabilities</td></tr>
+          <tr>
+            <td class="font-medium text-ink">Oversight Capability</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Quality Measurement</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Autism Therapy Focus</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-check">✓</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">AI Native Platform</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Mobile Based Solution</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="font-medium text-ink">Documentation for ABA Sessions</td>
+            <td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td>
+            <td class="ev"><span class="cmp-check">✓</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-8 grid sm:grid-cols-2 gap-4 max-w-xl reveal">
+      <div class="rounded-2xl p-6 text-center border border-blue-ice bg-ice-gradient" >
+        <div class="text-3xl font-bold text-navy stat-num mb-2">5/5</div>
+        <p class="text-sm text-navy/55">Only platform with all advanced capabilities for autism therapy</p>
+      </div>
+      <div class="rounded-2xl p-6 text-center border border-blue-ice bg-ice-gradient" >
+        <div class="text-4xl font-bold text-navy stat-num mb-2">100%</div>
+        <p class="text-sm text-navy/55">ABA-specific — not adapted from home care or general EVV</p>
+      </div>
+    </div>
+
+    <!-- Traditional vs EvidentABA -->
+    <div class="mt-20">
+      <div class="mb-10 reveal">
+        <p class="section-label mb-4">Approach comparison</p>
+        <h2 class="font-serif text-[clamp(2rem,3.5vw,3rem)] font-bold text-navy leading-tight max-w-xl">Traditional vs. EvidentABA.</h2>
+      </div>
+      <div class="overflow-x-auto rounded-2xl border border-blue-ice shadow-sm reveal">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th class="text-left font-semibold text-navy/60 text-sm py-5">Feature</th>
+              <th class="text-center bg-gray-50 font-semibold text-navy/60 py-5">Traditional Method</th>
+              <th class="ev text-center py-5">EvidentABA Platform</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="font-medium text-ink">Verification Method</td><td class="text-navy/55">Paper-based claims</td><td class="ev font-medium text-navy">Computer vision &amp; AI</td></tr>
+            <tr><td class="font-medium text-ink">Processing Time</td><td class="text-navy/55">Days to weeks</td><td class="ev font-medium text-navy">2–3 minutes</td></tr>
+            <tr><td class="font-medium text-ink">Fraud Detection</td><td class="text-navy/55">Retroactive audits</td><td class="ev font-medium text-navy">Real-time prevention</td></tr>
+            <tr><td class="font-medium text-ink">Quality Assessment</td><td class="text-navy/55">Sampling &amp; surveys</td><td class="ev font-medium text-navy">Every session analyzed</td></tr>
+            <tr><td class="font-medium text-ink">Provider Burden</td><td class="text-navy/55">High documentation</td><td class="ev font-medium text-navy">Automated reporting</td></tr>
+            <tr><td class="font-medium text-ink">Cost Efficiency</td><td class="text-navy/55">High admin costs</td><td class="ev font-medium text-navy">85% reduction</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     TRUST — credentials
+════════════════════════════════════════════ -->
+<section class="py-24 px-6 lg:px-10 relative overflow-hidden bg-pale-to-white">
+  <!-- Background accent -->
+  <div class="absolute left-0 top-0 w-[500px] h-[500px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(27,58,107,0.05),transparent 70%);transform:translate(-30%,-20%);"></div>
+
+  <div class="max-w-7xl mx-auto relative z-10">
+    <div class="grid lg:grid-cols-5 gap-12 lg:gap-16 items-center">
+
+      <!-- LEFT: image (3/5 columns) -->
+      <div class="lg:col-span-3 reveal">
+        <div class="trust-img-wrap">
+          <img
+            src="evidentaba-trust.png"
+            alt="EvidentABA healthcare and AI team"
+            onerror="this.parentElement.style.background='linear-gradient(135deg,#0D2244,#1B3A6B)'; this.style.display='none';"
+          />
+          <!-- Overlay gradient -->
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,34,68,0.55) 0%,transparent 50%);"></div>
+          <!-- Bottom badges row -->
+          <div class="abs-bottom-row flex gap-3 flex-wrap">
+            <div class="img-badge img-badge-p2" style="position:relative;">
+              <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+              <span class="text-xs font-semibold text-navy">HIPAA Compliant</span>
+            </div>
+            <div class="img-badge img-badge-p2" style="position:relative;">
+              <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="#29ABE2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              <span class="text-xs font-semibold text-navy">CMS Validated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: text + cards (2/5 columns) -->
+      <div class="lg:col-span-2">
+        <div class="reveal">
+          <div class="sky-accent-line"></div>
+          <p class="section-label mb-4">Our team</p>
+          <h2 class="font-serif text-[clamp(2rem,3.5vw,2.75rem)] font-bold text-navy leading-tight mb-6">
+            Built by healthcare<br/>and AI experts.
+          </h2>
+          <p class="text-navy/55 leading-relaxed mb-8">Developed with direct input from state Medicaid programs and validated by CMS standards. MIT research, 20+ years healthcare experience, Stanford engineering.</p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 reveal reveal-delay-1">
+          <div class="rounded-2xl p-6 lift shadow-sm border border-blue-ice flex items-center gap-4 bg-pale-gradient" >
+            <div class="icon-box icon-box-44">
+              <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            </div>
+            <div>
+              <div class="font-bold text-navy text-sm">MIT Research</div>
+              <div class="text-xs text-navy/50 mt-0.5">Computer vision and behavioral AI development</div>
+            </div>
+          </div>
+          <div class="rounded-2xl p-6 lift shadow-sm border border-blue-ice flex items-center gap-4 reveal reveal-delay-1 bg-pale-gradient" >
+            <div class="icon-box icon-box-44">
+              <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            </div>
+            <div>
+              <div class="font-bold text-navy text-sm">20+ Yrs Healthcare</div>
+              <div class="text-xs text-navy/50 mt-0.5">Deep Medicaid and MCO operations experience</div>
+            </div>
+          </div>
+          <div class="rounded-2xl p-6 lift shadow-sm border border-blue-ice flex items-center gap-4 reveal reveal-delay-2 bg-pale-gradient" >
+            <div class="icon-box icon-box-44">
+              <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            </div>
+            <div>
+              <div class="font-bold text-navy text-sm">CMS Validated + HIPAA + BAA</div>
+              <div class="text-xs text-navy/50 mt-0.5">Full compliance on every contract, from day one</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     FAQ
+════════════════════════════════════════════ -->
+<section id="faq" class="py-24 px-6 lg:px-10 relative overflow-hidden bg-pale-to-ice">
+  <!-- Decorative circle -->
+  <div class="absolute right-0 bottom-0 w-[400px] h-[400px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(27,58,107,0.05),transparent 70%);transform:translate(20%,20%);"></div>
+  <div class="max-w-3xl mx-auto relative z-10">
+    <div class="mb-14 reveal text-center">
+      <div class="sky-accent-line mx-auto"></div>
+      <p class="section-label mb-3">FAQ</p>
+      <h2 class="font-serif text-[clamp(2rem,3.5vw,2.75rem)] font-bold text-navy leading-tight">Common questions.</h2>
+    </div>
+    <div id="faq-list" class="reveal bg-white rounded-2xl shadow-sm border border-blue-ice p-2 px-6"></div>
+    <p class="mt-10 text-sm text-navy/40 text-center reveal">Still have questions? <a href="mailto:contact@evidentaba.com" class="text-navy/70 underline hover:text-navy">Email us →</a></p>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     CTA BANNER
+════════════════════════════════════════════ -->
+<section class="bg-cta-grad py-24 px-6 lg:px-10 relative overflow-hidden">
+  <!-- Background orb -->
+  <div class="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(41,171,226,0.14),transparent 65%);transform:translate(20%,-20%);"></div>
+
+  <div class="max-w-7xl my-10 mx-auto flex flex-col md:flex-row items-center justify-between gap-10 reveal relative z-10">
+    <div x-show="audience === 'providers'">
+      <h2 class="font-serif text-[clamp(1.75rem,3vw,2.75rem)] font-bold text-white leading-tight mb-3">
+        Give your therapists<br/>their time back.
+      </h2>
+      <p class="text-white/55 max-w-md leading-relaxed">Join ABA clinics using EvidentABA to eliminate documentation burden, reduce claim denials, and get recognized for quality care.</p>
+    </div>
+    <div x-show="audience === 'payers'" x-cloak>
+      <h2 class="font-serif text-[clamp(1.75rem,3vw,2.75rem)] font-bold text-white leading-tight mb-3">
+        Ready to see it<br/>in action?
+      </h2>
+      <p class="text-white/55 max-w-md leading-relaxed">Join state Medicaid programs and MCOs using EvidentABA to verify every session, reduce fraud, and improve care quality.</p>
+    </div>
+    <div class="flex flex-col sm:flex-row gap-3 flex-shrink-0">
+      <a href="#contact" @click.prevent="goto('contact')" class="btn-sky px-8 py-3.5 text-sm">Book a Demo</a>
+      <a href="#roi" @click.prevent="goto('roi')" class="btn-white px-8 py-3.5 text-sm">Calculate ROI</a>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     CONTACT FORM
+════════════════════════════════════════════ -->
+<section id="contact" class="py-24 px-6 lg:px-10 relative overflow-hidden bg-white-to-pale">
+  <!-- Decorative orb -->
+  <div class="absolute left-0 top-0 w-[500px] h-[500px] rounded-full pointer-events-none" style="background:radial-gradient(circle,rgba(41,171,226,0.07),transparent 70%);transform:translate(-30%,-20%);"></div>
+  <div class="max-w-7xl mx-auto grid md:grid-cols-2 gap-16 items-start relative z-10">
+
+    <div class="reveal">
+      <div class="sky-accent-line"></div>
+      <p class="section-label mb-4">Get in touch</p>
+      <h2 class="font-serif text-[clamp(2rem,3.5vw,2.75rem)] font-bold text-navy leading-tight mb-5">
+        Let's talk about<br/>your program.
+      </h2>
+      <p class="text-navy/55 leading-relaxed max-w-sm mb-8">We respond within one business day. Tell us about your organization and we'll tailor the demo to your needs.</p>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 text-sm text-navy/60">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-ice-gradient" >
+            <svg class="w-4 h-4 text-sky" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <a href="mailto:contact@evidentaba.com" class="hover:text-navy transition-colors">contact@evidentaba.com</a>
+        </div>
+        <div class="flex items-center gap-3 text-sm text-navy/60">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-ice-gradient" >
+            <svg class="w-4 h-4 text-sky" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </div>
+          <a href="https://www.linkedin.com/company/evidentaba" target="_blank" rel="noopener" class="hover:text-navy transition-colors">linkedin.com/company/evidentaba</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal reveal-delay-1" x-data="contactForm()">
+      <form @submit.prevent="submit()" class="bg-white rounded-2xl p-8 shadow-sm border border-blue-ice space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">First Name *</label>
+            <input type="text" x-model="f.first" required placeholder="John" class="field"/>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">Last Name *</label>
+            <input type="text" x-model="f.last" required placeholder="Doe" class="field"/>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">Work Email *</label>
+          <input type="email" x-model="f.email" required placeholder="john@organization.com" class="field"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">Organization *</label>
+          <input type="text" x-model="f.org" required placeholder="Your organization" class="field"/>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">Phone</label>
+            <input type="tel" x-model="f.phone" placeholder="(555) 123-4567" class="field"/>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">I am a...</label>
+            <select x-model="f.role" class="field">
+              <option value="">Select...</option>
+              <option>ABA Provider / Clinic</option>
+              <option>MCO / Insurance Plan</option>
+              <option>State Medicaid Agency</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-navy/55 uppercase tracking-wider mb-1.5">Message *</label>
+          <textarea x-model="f.msg" required rows="4" placeholder="Tell us about your organization's needs..." class="field resize-none"></textarea>
+        </div>
+        <button type="submit" :disabled="busy" class="btn-primary w-full py-3.5 text-sm">
+          <span x-show="!busy">Schedule a Demo →</span>
+          <span x-show="busy" x-cloak class="flex items-center justify-center gap-2">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path class="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            Sending...
+          </span>
+        </button>
+        <div x-show="done" x-cloak class="text-center p-4 bg-green-50 rounded-xl border border-green-100">
+          <p class="text-green-700 font-semibold text-sm">✅ We got it! Expect a reply within one business day.</p>
+        </div>
+        <p class="text-xs text-navy/30 text-center">By submitting you agree to our <a href="/privacy" class="underline">Privacy Policy</a>.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════ -->
+<footer class="bg-footer text-white py-14 px-6 lg:px-10">
+  <div class="max-w-7xl mx-auto">
+    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+
+      <div class="sm:col-span-2 md:col-span-1">
+        <div class="flex items-center gap-2.5 mb-4">
+          <img src="../assets/logo.png" alt="EvidentABA" class="h-8 w-auto brightness-0 invert"/>
+          <span class="font-bold text-white text-base">EvidentABA</span>
+        </div>
+        <p class="text-sm text-white/60 leading-relaxed mb-5">Elevating ABA therapy standards with AI-powered verification and quality measurement.</p>
+        <a href="https://www.linkedin.com/company/evidentaba" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 text-xs text-white/55 hover:text-white transition-colors">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          LinkedIn
+        </a>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-white/45 mb-5">For Providers</h4>
+        <nav class="space-y-3 text-sm">
+          <a href="/providers" class="block text-white/65 hover:text-white transition-colors">Overview</a>
+          <a href="/providers/how-it-works" class="block text-white/65 hover:text-white transition-colors">How It Works</a>
+          <a href="/providers/benefits" class="block text-white/65 hover:text-white transition-colors">Benefits</a>
+          <a href="/providers/faq" class="block text-white/65 hover:text-white transition-colors">FAQ</a>
+          <a href="/providers/about" class="block text-white/65 hover:text-white transition-colors">About Us</a>
+        </nav>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-white/45 mb-5">For Payors</h4>
+        <nav class="space-y-3 text-sm">
+          <a href="/payers" class="block text-white/65 hover:text-white transition-colors">Overview</a>
+          <a href="/payers/how-it-works" class="block text-white/65 hover:text-white transition-colors">How It Works</a>
+          <a href="/payers/roi" class="block text-white/65 hover:text-white transition-colors">ROI Calculator</a>
+          <a href="/payers/faq" class="block text-white/65 hover:text-white transition-colors">FAQ</a>
+          <a href="/payers/about" class="block text-white/65 hover:text-white transition-colors">About Us</a>
+        </nav>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-white/45 mb-5">Company</h4>
+        <nav class="space-y-3 text-sm">
+          <a href="/blog" class="block text-white/65 hover:text-white transition-colors">Blog</a>
+          <a href="mailto:contact@evidentaba.com" class="block text-white/65 hover:text-white transition-colors">Contact</a>
+          <a href="/privacy" class="block text-white/65 hover:text-white transition-colors">Privacy Policy</a>
+          <a href="/terms" class="block text-white/65 hover:text-white transition-colors">Terms of Service</a>
+        </nav>
+      </div>
+    </div>
+
+    <hr class="border-white/15 mb-6"/>
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-white/50">
+      <p>&copy; 2025 EvidentABA. All rights reserved.</p>
+      <div class="flex items-center gap-5">
+        <span class="flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+          HIPAA Compliant
+        </span>
+        <span class="flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-sky" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          CMS Validated
+        </span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+
+</body>
+</html>
